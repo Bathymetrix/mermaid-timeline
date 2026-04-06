@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from .cycle_raw import iter_cycle_events
-from .mer_raw import iter_mer_records
+from .mer_raw import iter_mer_data_blocks
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -41,16 +41,17 @@ def main(argv: list[str] | None = None) -> int:
 def _handle_inspect_mer(args: argparse.Namespace) -> int:
     """Handle the inspect-mer subcommand."""
 
-    for record in iter_mer_records(args.path):
-        time_text = record.timestamp.isoformat() if record.timestamp else "-"
-        print(f"{time_text}\t{record.record_type}\t{len(record.payload)}")
+    for block in iter_mer_data_blocks(args.path):
+        time_text = block.date.isoformat() if block.date else "-"
+        payload_length = len(block.data_payload) if block.data_payload is not None else 0
+        print(f"{time_text}\tEVENT\t{payload_length}")
     return 0
 
 
 def _handle_inspect_cycle(args: argparse.Namespace) -> int:
     """Handle the inspect-cycle subcommand."""
 
-    for event in iter_cycle_events(args.path):
-        time_text = event.timestamp.isoformat() if event.timestamp else "-"
-        print(f"{time_text}\t{event.event_type}\t{event.message}")
+    for entry in iter_cycle_events(args.path):
+        code_text = entry.code or "-"
+        print(f"{entry.time.isoformat()}\t{entry.subsystem}:{code_text}\t{entry.message}")
     return 0

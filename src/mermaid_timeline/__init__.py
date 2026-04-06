@@ -3,23 +3,24 @@
 from .cycle_raw import iter_cycle_events
 from .models import (
     AcquisitionWindow,
-    LogEvent,
-    LogEventType,
-    MerRecord,
+    CycleLogEntry,
+    MerDataBlock,
+    MerFileMetadata,
     ProductCoverage,
     TimelineStatus,
-    TimelineStatusKind,
 )
+from .mer_raw import iter_mer_data_blocks, parse_mer_file
 
 __all__ = [
     "AcquisitionWindow",
-    "LogEvent",
-    "LogEventType",
-    "MerRecord",
+    "CycleLogEntry",
+    "MerDataBlock",
+    "MerFileMetadata",
     "ProductCoverage",
     "TimelineStatus",
-    "TimelineStatusKind",
     "iter_cycle_events",
+    "iter_mer_data_blocks",
+    "parse_mer_file",
 ]
 
 __version__ = "0.1.0"

@@ -2,38 +2,45 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
+import re
 from typing import Iterator
 
-from .models import LogEvent, LogEventType
+from .models import CycleLogEntry
+
+_CYCLE_LINE_RE = re.compile(
+    r"^(?P<time>.+?):\[(?P<tag>[^\]]+)\](?P<message>.*)$"
+)
 
 
-def iter_cycle_events(path: Path) -> Iterator[LogEvent]:
-    """Yield conservative events from a .CYCLE.h text file."""
+def iter_cycle_events(path: Path) -> Iterator[CycleLogEntry]:
+    """Yield parsed .CYCLE.h lines as conservative structured entries."""
 
     with path.open("r", encoding="utf-8") as handle:
-        for line_number, raw_line in enumerate(handle, start=1):
-            line = raw_line.rstrip("\n")
+        for raw_line in handle:
+            line = raw_line.rstrip("\r\n")
             if not line.strip():
                 continue
-            yield LogEvent(
-                line_number=line_number,
-                event_type=_infer_event_type(line),
-                message=line,
+            match = _CYCLE_LINE_RE.match(line)
+            if not match:
+                continue
+            tag = match.group("tag")
+            subsystem, code = _parse_tag(tag)
+            yield CycleLogEntry(
+                time=datetime.fromisoformat(match.group("time")),
+                subsystem=subsystem,
+                code=code,
+                message=match.group("message"),
                 raw_line=line,
+                source_file=path,
             )
 
 
-def _infer_event_type(line: str) -> LogEventType:
-    """Infer a basic event type from raw cycle text."""
+def _parse_tag(tag: str) -> tuple[str, str | None]:
+    """Split a bracket tag into subsystem and optional code."""
 
-    lowered = line.lower()
-    if "error" in lowered:
-        return LogEventType.ERROR
-    if "warn" in lowered:
-        return LogEventType.WARNING
-    if "debug" in lowered:
-        return LogEventType.DEBUG
-    if "info" in lowered:
-        return LogEventType.INFO
-    return LogEventType.UNKNOWN
+    if "," not in tag:
+        return tag.strip(), None
+    subsystem, code = tag.split(",", maxsplit=1)
+    return subsystem.strip(), code.strip() or None

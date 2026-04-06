@@ -1,8 +1,13 @@
-from mermaid_timeline.acq_windows import collect_acquisition_windows
-from mermaid_timeline.models import AcquisitionWindow
+from pathlib import Path
+
+from mermaid_timeline.acq_windows import extract_acquisition_windows
+from mermaid_timeline.cycle_raw import iter_cycle_events
 
 
-def test_collect_acquisition_windows_returns_list() -> None:
-    windows = collect_acquisition_windows([AcquisitionWindow(source="test")])
+def test_extract_acquisition_windows_from_fixture() -> None:
+    path = Path("data/fixtures/0075_6858665E.CYCLE.h")
+    windows = extract_acquisition_windows(iter_cycle_events(path))
 
-    assert len(windows) == 1
+    assert len(windows) >= 1
+    assert windows[0].start.isoformat() == "2025-06-23T05:05:24"
+    assert windows[0].stop.isoformat() == "2025-06-23T05:20:32"
