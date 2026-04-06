@@ -9,7 +9,7 @@ from typing import Any
 
 
 class LogEventType(StrEnum):
-    """Conservative event categories for parsed log events."""
+    """Conservative event categories for parsed cycle/log text events."""
 
     UNKNOWN = "unknown"
     INFO = "info"

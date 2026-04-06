@@ -1,4 +1,4 @@
-"""Parser interfaces for MERMAID .LOG files."""
+"""Parser interfaces for MERMAID .CYCLE.h text files."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from typing import Iterator
 from .models import LogEvent, LogEventType
 
 
-def iter_log_events(path: Path) -> Iterator[LogEvent]:
-    """Yield conservative log events from a text log file."""
+def iter_cycle_events(path: Path) -> Iterator[LogEvent]:
+    """Yield conservative events from a .CYCLE.h text file."""
 
     with path.open("r", encoding="utf-8") as handle:
         for line_number, raw_line in enumerate(handle, start=1):
@@ -25,7 +25,7 @@ def iter_log_events(path: Path) -> Iterator[LogEvent]:
 
 
 def _infer_event_type(line: str) -> LogEventType:
-    """Infer a basic event type from message text."""
+    """Infer a basic event type from raw cycle text."""
 
     lowered = line.lower()
     if "error" in lowered:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .mer_log import iter_log_events
+from .cycle_raw import iter_cycle_events
 from .mer_raw import iter_mer_records
 
 
@@ -19,9 +19,12 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_mer.add_argument("path", type=Path, help="Path to a MER file.")
     inspect_mer.set_defaults(handler=_handle_inspect_mer)
 
-    inspect_log = subparsers.add_parser("inspect-log", help="Inspect parsed LOG events.")
-    inspect_log.add_argument("path", type=Path, help="Path to a LOG file.")
-    inspect_log.set_defaults(handler=_handle_inspect_log)
+    inspect_cycle = subparsers.add_parser(
+        "inspect-cycle",
+        help="Inspect parsed .CYCLE.h events.",
+    )
+    inspect_cycle.add_argument("path", type=Path, help="Path to a .CYCLE.h file.")
+    inspect_cycle.set_defaults(handler=_handle_inspect_cycle)
 
     return parser
 
@@ -44,10 +47,10 @@ def _handle_inspect_mer(args: argparse.Namespace) -> int:
     return 0
 
 
-def _handle_inspect_log(args: argparse.Namespace) -> int:
-    """Handle the inspect-log subcommand."""
+def _handle_inspect_cycle(args: argparse.Namespace) -> int:
+    """Handle the inspect-cycle subcommand."""
 
-    for event in iter_log_events(args.path):
+    for event in iter_cycle_events(args.path):
         time_text = event.timestamp.isoformat() if event.timestamp else "-"
         print(f"{time_text}\t{event.event_type}\t{event.message}")
     return 0

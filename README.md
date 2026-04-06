@@ -5,7 +5,7 @@
 The package intentionally separates parsing from interpretation:
 
 - raw `.MER` parsing lives in `mer_raw.py`
-- `.LOG` parsing lives in `mer_log.py`
+- `.CYCLE.h` text parsing lives in `cycle_raw.py`
 - higher-level interpretation modules stay separate
 
 ## Installation
@@ -22,10 +22,10 @@ Inspect a MER file:
 mermaid-timeline inspect-mer /path/to/file.MER
 ```
 
-Inspect a LOG file:
+Inspect a `.CYCLE.h` file:
 
 ```bash
-mermaid-timeline inspect-log /path/to/file.LOG
+mermaid-timeline inspect-cycle /path/to/file.CYCLE.h
 ```
 
 Both commands currently expose conservative parser stubs intended to preserve raw information without overcommitting to a specific decode format.

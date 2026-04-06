@@ -1,5 +1,6 @@
 """Top-level package for mermaid_timeline."""
 
+from .cycle_raw import iter_cycle_events
 from .models import (
     AcquisitionWindow,
     LogEvent,
@@ -18,6 +19,7 @@ __all__ = [
     "ProductCoverage",
     "TimelineStatus",
     "TimelineStatusKind",
+    "iter_cycle_events",
 ]
 
 __version__ = "0.1.0"
