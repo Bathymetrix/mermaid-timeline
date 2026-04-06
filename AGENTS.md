@@ -8,6 +8,8 @@
 - Always tell the user when the current state is a good time to commit.
 - Treat this file as the persistent handoff document for future Codex sessions.
 - Update or rewrite this file whenever project assumptions, parsing boundaries, fixtures, or workflow rules change.
+- Add the exact Bathymetrix header only to `src/mermaid_timeline/__init__.py` and `src/mermaid_timeline/cli.py`.
+- Do not add the Bathymetrix header to `README.md`, tests, or internal implementation modules unless the user explicitly asks.
 
 ## Project Purpose
 
@@ -78,6 +80,7 @@ For event blocks:
 - Textual docs/help may still refer to `.CYCLE.h` explicitly.
 - `.CYCLE.h` and `.MER` should be treated as parallel raw inputs.
 - Their mutual references may be useful later, but parsing must not depend on them matching.
+- The Bathymetrix header currently belongs only in `src/mermaid_timeline/__init__.py` and `src/mermaid_timeline/cli.py`.
 
 ## Current Fixtures
 

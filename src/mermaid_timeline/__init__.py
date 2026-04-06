@@ -1,3 +1,9 @@
+# Bathymetrix™
+# https://bathymetrix.com
+# © 2026 Bathymetrix, LLC
+# Author: Joel D. Simon <jdsimon@bathymetrix.com>
+# Licensed under the MIT License
+
 """Top-level package for mermaid_timeline."""
 
 from .cycle_raw import iter_cycle_events

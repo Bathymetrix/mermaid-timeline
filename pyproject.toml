@@ -1,3 +1,9 @@
+# Bathymetrix™
+# https://bathymetrix.com
+# © 2026 Bathymetrix, LLC
+# Author: Joel D. Simon <jdsimon@bathymetrix.com>
+# Licensed under the MIT License
+
 [build-system]
 requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"

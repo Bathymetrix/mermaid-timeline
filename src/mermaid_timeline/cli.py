@@ -1,3 +1,9 @@
+# Bathymetrix™
+# https://bathymetrix.com
+# © 2026 Bathymetrix, LLC
+# Author: Joel D. Simon <jdsimon@bathymetrix.com>
+# Licensed under the MIT License
+
 """Command line interface for mermaid_timeline."""
 
 from __future__ import annotations
@@ -12,7 +18,10 @@ from .mer_raw import iter_mer_data_blocks
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level argument parser."""
 
-    parser = argparse.ArgumentParser(prog="mermaid-timeline")
+    parser = argparse.ArgumentParser(
+        prog="mermaid-timeline",
+        description="Bathymetrix™ CLI for conservative MERMAID raw parsing.",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     inspect_mer = subparsers.add_parser("inspect-mer", help="Inspect raw MER records.")
