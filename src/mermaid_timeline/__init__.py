@@ -7,8 +7,8 @@
 """Top-level package for mermaid_timeline."""
 
 from .audit import CycleCorpusStats, MerCorpusStats, audit_processed_cycle, audit_server_mer
+from .bin2cycle import Bin2CycleConfig, Bin2CycleError, iter_decoded_cycle_lines
 from .cycle_raw import iter_cycle_events
-from .decode import iter_decoded_cycle_lines
 from .discovery import (
     iter_bin_files,
     iter_cycle_files,
@@ -30,6 +30,8 @@ from .mer_raw import iter_mer_data_blocks, parse_mer_file
 
 __all__ = [
     "AcquisitionWindow",
+    "Bin2CycleConfig",
+    "Bin2CycleError",
     "CycleCorpusStats",
     "CycleLogEntry",
     "MerCorpusStats",

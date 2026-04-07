@@ -10,6 +10,7 @@
 - Update or rewrite this file whenever project assumptions, parsing boundaries, fixtures, or workflow rules change.
 - Add the exact Bathymetrix header only to `src/mermaid_timeline/__init__.py` and `src/mermaid_timeline/cli.py`.
 - Do not add the Bathymetrix header to `README.md`, tests, or internal implementation modules unless the user explicitly asks.
+- When referring to an output cycle file, call it `CYCLE` (parallel to `BIN`, `LOG`, and `MER`).
 
 ## Project Purpose
 
@@ -17,6 +18,7 @@
 
 The current raw inputs are:
 
+- `.BIN` files
 - `.CYCLE.h` text files
 - `.MER` files
 
@@ -32,6 +34,13 @@ Do not add:
 - higher-level timeline interpretation
 
 ## Current Parsing Scope
+
+Canonical long-term source model:
+
+- upstream raw `.BIN`
+- upstream raw `.MER`
+
+Processed `.CYCLE.h` remains supported as a compatibility, reference, and comparison path rather than the canonical long-term source.
 
 ### `.CYCLE.h`
 
@@ -78,7 +87,8 @@ For event blocks:
 
 - Code-facing names should use `cycle` rather than `log` for `.CYCLE.h` parsing.
 - Textual docs/help may still refer to `.CYCLE.h` explicitly.
-- `.CYCLE.h` and `.MER` should be treated as parallel raw inputs.
+- Discovery should support upstream/server-style raw inputs separately from processed/reference inputs.
+- `.CYCLE.h` and `.MER` may still be treated as parallel parser inputs when needed, but processed `.CYCLE.h` is secondary/reference-oriented.
 - Their mutual references may be useful later, but parsing must not depend on them matching.
 - The Bathymetrix header currently belongs only in `src/mermaid_timeline/__init__.py` and `src/mermaid_timeline/cli.py`.
 
