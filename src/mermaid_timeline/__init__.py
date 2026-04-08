@@ -2,9 +2,13 @@
 # https://bathymetrix.com
 # © 2026 Bathymetrix, LLC
 # Author: Joel D. Simon <jdsimon@bathymetrix.com>
-# Licensed under the MIT License
+# SPDX-License-Identifier: MIT
 
 """Top-level package for mermaid_timeline."""
+
+__author__ = "Joel D. Simon"
+__license__ = "MIT"
+__copyright__ = "© 2026 Bathymetrix, LLC"
 
 from .audit import CycleCorpusStats, MerCorpusStats, audit_processed_cycle, audit_server_mer
 from .bin2cycle import Bin2CycleConfig, Bin2CycleError, iter_decoded_cycle_lines

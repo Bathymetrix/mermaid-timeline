@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+
 """Dev-facing validation for the external BIN-to-CYCLE adapter."""
 
 from __future__ import annotations

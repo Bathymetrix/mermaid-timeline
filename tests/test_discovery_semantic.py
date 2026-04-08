@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 from pathlib import Path
 
 from mermaid_timeline.discovery import iter_processed_cycle, iter_server_mer

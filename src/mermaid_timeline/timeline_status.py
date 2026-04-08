@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 """Timeline status helpers."""
 
 from __future__ import annotations

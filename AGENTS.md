@@ -16,6 +16,11 @@
 - In the corpus, raw input data live in `server`, and manufacturer-produced output used for audit/reference comparison lives in `processed`.
 - Before writing a new audit workflow, first scan existing audit code for reusable logic and easy refactors instead of starting from a fresh script by default.
 - When the user's intent is clear, rewrite their rules into cleaner internal guidance here rather than copying rough wording verbatim. If the intent is unclear, ask before recording the rule.
+- Package license defaults to MIT. A root `LICENSE` file must exist.
+- Every Python source file must include `SPDX-License-Identifier: MIT`, but must not include the full license text.
+- The exact Bathymetrix header belongs only in `src/mermaid_timeline/__init__.py` and `src/mermaid_timeline/cli.py`, unless the user explicitly expands that set.
+- Use `Bathymetrix™` only in approved file headers and rare top-level visible branding. Do not use the trademark marker in identifiers, module names, imports, docstrings, or inline comments.
+- Package authorship/licensing metadata must live in exactly one location: `src/mermaid_timeline/__init__.py` via `__author__`, `__license__`, and `__copyright__`.
 
 ## Project Purpose
 

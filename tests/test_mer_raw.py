@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 from pathlib import Path
 
 from mermaid_timeline.mer_raw import parse_mer_file

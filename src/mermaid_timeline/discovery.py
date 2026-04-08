@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 """Recursive discovery of raw MERMAID input files."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 """Acquisition window helpers."""
 
 from __future__ import annotations

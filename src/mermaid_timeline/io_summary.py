@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 """Small I/O summary helpers."""
 
 from __future__ import annotations

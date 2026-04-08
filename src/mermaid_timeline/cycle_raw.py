@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 """Parser interfaces for MERMAID .CYCLE.h text files."""
 
 from __future__ import annotations

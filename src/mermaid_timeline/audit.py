@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 """Corpus audit helpers built on top of discovery and raw parsing."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 from pathlib import Path
 
 from mermaid_timeline.audit import audit_processed_cycle, audit_server_mer

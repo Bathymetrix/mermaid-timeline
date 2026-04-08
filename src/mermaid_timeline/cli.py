@@ -2,7 +2,7 @@
 # https://bathymetrix.com
 # © 2026 Bathymetrix, LLC
 # Author: Joel D. Simon <jdsimon@bathymetrix.com>
-# Licensed under the MIT License
+# SPDX-License-Identifier: MIT
 
 """Command line interface for mermaid_timeline."""
 

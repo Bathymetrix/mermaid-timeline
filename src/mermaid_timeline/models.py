@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 """Core typed models used across the package."""
 
 from __future__ import annotations

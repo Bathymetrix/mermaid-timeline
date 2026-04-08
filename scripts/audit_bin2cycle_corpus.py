@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+
 """Dev-facing full-corpus BIN->CYCLE adapter audit."""
 
 from __future__ import annotations

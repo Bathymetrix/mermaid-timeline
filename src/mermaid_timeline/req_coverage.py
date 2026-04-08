@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 """Requested product coverage helpers."""
 
 from __future__ import annotations

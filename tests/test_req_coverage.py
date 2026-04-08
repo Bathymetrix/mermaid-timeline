@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 from mermaid_timeline.models import ProductCoverage
 from mermaid_timeline.req_coverage import collect_requested_coverage
 

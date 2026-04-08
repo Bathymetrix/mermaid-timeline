@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 from pathlib import Path
 
 from mermaid_timeline.acq_windows import extract_acquisition_windows

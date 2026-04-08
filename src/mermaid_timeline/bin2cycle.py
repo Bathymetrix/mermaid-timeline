@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 """External adapter layer for upstream BIN-to-cycle decoding."""
 
 from __future__ import annotations

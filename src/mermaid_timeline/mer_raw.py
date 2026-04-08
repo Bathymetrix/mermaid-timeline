@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 """Low-level interfaces for parsing raw MER files."""
 
 from __future__ import annotations
