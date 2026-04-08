@@ -8,6 +8,7 @@
 - Prefer generators for file parsing where practical.
 - Add or update tests with any real logic change.
 - Prefer small, coherent commits and always tell the user when the current state is a good time to commit.
+- Any time suggesting a commit, also suggest a matching commit comment/message.
 - Treat this file as the persistent handoff document for future Codex sessions and update it whenever assumptions, boundaries, fixtures, or workflow rules change.
 - Add the exact Bathymetrix header only to `src/mermaid_timeline/__init__.py` and `src/mermaid_timeline/cli.py`.
 - Do not add the Bathymetrix header to `README.md`, tests, or internal implementation modules unless the user explicitly asks.
@@ -113,6 +114,10 @@ For event blocks:
 
 Tracked fixtures currently include:
 
+- `data/fixtures/452.020-P-06/cycle/*.CYCLE`
+- `data/fixtures/452.020-P-06/log/*.LOG`
+- `data/fixtures/452.020-P-06/mer/*.MER`
+- `data/fixtures/452.020-P-06/README.md`
 - `data/fixtures/467.174-T-0100/bin/*.BIN`
 - `data/fixtures/467.174-T-0100/cycle/*.CYCLE`
 - `data/fixtures/467.174-T-0100/log/*.LOG`
@@ -124,6 +129,8 @@ These fixtures are intentional parser fixtures and should generally remain track
 
 Current fixture corpus note:
 
+- `data/fixtures/452.020-P-06/` mirrors top-level canonical artifacts for float `452.020-P-06`, grouped by artifact type for easier cross-checking.
+- This older-generation float is `LOG`-first, so the fixture family has no `BIN` branch.
 - `data/fixtures/467.174-T-0100/` mirrors top-level canonical artifacts for float `467.174-T-0100`, grouped by artifact type for easier cross-checking.
 - Raw `BIN` and `MER` files in this fixture family are copied from `~/mermaid/server`.
 - Treat this fixture family as the primary local fixture corpus unless the user asks for a different source set.
