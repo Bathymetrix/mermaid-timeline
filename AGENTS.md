@@ -30,6 +30,8 @@
 Supported inputs currently include:
 
 - `.BIN` files
+- `.LOG` files
+- `.CYCLE` text files
 - `.CYCLE.h` text files
 - `.MER` files
 
@@ -49,26 +51,41 @@ Do not add:
 Canonical long-term source model:
 
 - upstream raw `.BIN`
+- upstream raw `.LOG`
 - upstream raw `.MER`
 
-Processed `.CYCLE.h` remains supported as a compatibility, reference, and comparison path rather than the canonical long-term source.
+Derived operational products:
+
+- emitted raw `.CYCLE`
+- processed `.CYCLE.h`
+
+Processed `.CYCLE` and `.CYCLE.h` remain supported as compatibility, reference, and comparison paths rather than canonical long-term primitives when raw `LOG` exists.
 
 Decode/parsing boundary:
 
 - decode: raw `BIN` -> emitted raw `CYCLE` text
-- parsing: consume emitted raw `CYCLE` text or processed `.CYCLE.h`
+- parsing: consume raw `LOG`, emitted raw `CYCLE`, or processed `.CYCLE.h`
 - interpretation/timeline logic remains separate and should not be mixed into either layer
 
-### `.CYCLE.h`
+### Operational Text Sources
 
-Parse `.CYCLE.h` files into `CycleLogEntry` records with:
+Use one common `OperationalLogEntry` model for `LOG`, `CYCLE`, and `.CYCLE.h` with:
 
 - `time`
 - `subsystem`
 - `code`
 - `message`
+- `source_kind`
 - `raw_line`
 - `source_file`
+
+Preserve source identity via `source_kind`:
+
+- `log`
+- `cycle`
+- `cycle_h`
+
+Do not collapse `LOG`, `CYCLE`, and `.CYCLE.h` into one canonical source during parsing. Preserve provenance even when their content overlaps.
 
 Acquisition windows may be extracted only from explicit:
 
@@ -102,12 +119,16 @@ For event blocks:
 
 ## Current File/Layout Assumptions
 
-- Code-facing names should use `cycle` rather than `log` for `.CYCLE.h` parsing.
+- Use one common operational-line parser/model across `LOG`, `CYCLE`, and `.CYCLE.h`.
+- Code-facing names may still use `cycle` in legacy modules, but the parsed operational record type is `OperationalLogEntry`.
 - Code-facing names for upstream decode should make the `BIN` -> `CYCLE` transformation explicit.
 - Textual docs/help may still refer to `.CYCLE.h` explicitly.
 - Discovery should support upstream/server-style raw inputs separately from processed/reference inputs.
+- `LOG` is the native per-dive operational source.
+- `CYCLE` and `.CYCLE.h` are derived or stitched operational products and are secondary/reference-oriented relative to raw `LOG`.
 - `.CYCLE.h` and `.MER` may still be treated as parallel parser inputs when needed, but processed `.CYCLE.h` is secondary/reference-oriented.
 - Their mutual references may be useful later, but parsing must not depend on them matching.
+- A single `.MER` may include DET data from the current dive plus REG/REQ data from previous dives. Do not infer dive membership from `MerDataBlock.date` during parsing.
 - The Bathymetrix header currently belongs only in `src/mermaid_timeline/__init__.py` and `src/mermaid_timeline/cli.py`.
 
 ## Current Fixtures

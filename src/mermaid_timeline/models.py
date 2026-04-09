@@ -6,16 +6,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
+from typing import Literal
+
+type OperationalSourceKind = Literal["log", "cycle", "cycle_h"]
 
 
 @dataclass(slots=True)
-class CycleLogEntry:
-    """One parsed line from a .CYCLE.h text file."""
+class OperationalLogEntry:
+    """One parsed operational log line from LOG, CYCLE, or .CYCLE.h text."""
 
     time: datetime
     subsystem: str
     code: str | None
     message: str
+    source_kind: OperationalSourceKind
     raw_line: str
     source_file: Path
 
@@ -71,6 +76,21 @@ class MerDataBlock:
     raw_format_line: str | None
     data_payload: bytes | None
     source_file: Path
+
+
+@dataclass(slots=True)
+class EvidenceRecord:
+    """Minimal provenance-preserving evidence record for later correlation."""
+
+    kind: str
+    time: datetime | None = None
+    source_kind: str | None = None
+    source_file: Path | None = None
+    raw_text: str | None = None
+    metadata: dict[str, object] = field(default_factory=dict)
+
+
+CycleLogEntry = OperationalLogEntry
 
 
 @dataclass(slots=True)

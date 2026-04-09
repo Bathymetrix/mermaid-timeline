@@ -12,10 +12,11 @@ __copyright__ = "© 2026 Bathymetrix, LLC"
 
 from .audit import CycleCorpusStats, MerCorpusStats, audit_processed_cycle, audit_server_mer
 from .bin2cycle import Bin2CycleConfig, Bin2CycleError, iter_decoded_cycle_lines
-from .cycle_raw import iter_cycle_events
+from .cycle_raw import iter_cycle_events, iter_operational_log_entries
 from .discovery import (
     iter_bin_files,
     iter_cycle_files,
+    iter_log_files,
     iter_mer_env_files,
     iter_mer_files,
     iter_processed_cycle,
@@ -24,9 +25,10 @@ from .discovery import (
 )
 from .models import (
     AcquisitionWindow,
-    CycleLogEntry,
+    EvidenceRecord,
     MerDataBlock,
     MerFileMetadata,
+    OperationalLogEntry,
     ProductCoverage,
     TimelineStatus,
 )
@@ -37,10 +39,11 @@ __all__ = [
     "Bin2CycleConfig",
     "Bin2CycleError",
     "CycleCorpusStats",
-    "CycleLogEntry",
+    "EvidenceRecord",
     "MerCorpusStats",
     "MerDataBlock",
     "MerFileMetadata",
+    "OperationalLogEntry",
     "ProductCoverage",
     "TimelineStatus",
     "audit_processed_cycle",
@@ -48,6 +51,8 @@ __all__ = [
     "iter_bin_files",
     "iter_cycle_files",
     "iter_cycle_events",
+    "iter_log_files",
+    "iter_operational_log_entries",
     "iter_decoded_cycle_lines",
     "iter_mer_env_files",
     "iter_mer_files",

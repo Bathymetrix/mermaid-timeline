@@ -6,16 +6,16 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from .models import AcquisitionWindow, CycleLogEntry
+from .models import AcquisitionWindow, OperationalLogEntry
 
 
 def extract_acquisition_windows(
-    entries: Iterable[CycleLogEntry],
+    entries: Iterable[OperationalLogEntry],
 ) -> list[AcquisitionWindow]:
-    """Extract explicit acquisition start/stop windows from cycle entries."""
+    """Extract explicit acquisition start/stop windows from operational entries."""
 
     windows: list[AcquisitionWindow] = []
-    open_start: CycleLogEntry | None = None
+    open_start: OperationalLogEntry | None = None
 
     for entry in entries:
         message = entry.message.strip().lower()

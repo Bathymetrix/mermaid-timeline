@@ -10,6 +10,7 @@ from typing import Iterator
 RAW_PATTERNS = {
     "bin": "*.BIN",
     "cycle": "*.CYCLE.h",
+    "log": "*.LOG",
     "mer": "*.MER",
     "mer_env": "*.MER.env",
 }
@@ -25,6 +26,12 @@ def iter_cycle_files(root: Path) -> Iterator[Path]:
     """Recursively yield all .CYCLE.h files under root."""
 
     yield from iter_raw_inputs(root, kinds=("cycle",))
+
+
+def iter_log_files(root: Path) -> Iterator[Path]:
+    """Recursively yield all native operational .LOG files under root."""
+
+    yield from iter_raw_inputs(root, kinds=("log",))
 
 
 def iter_mer_files(root: Path) -> Iterator[Path]:

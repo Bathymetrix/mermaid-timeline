@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .cycle_raw import iter_cycle_events
+from .cycle_raw import iter_operational_log_entries
 from .mer_raw import iter_mer_data_blocks
 
 
@@ -30,9 +30,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     inspect_cycle = subparsers.add_parser(
         "inspect-cycle",
-        help="Inspect parsed .CYCLE.h events.",
+        help="Inspect parsed operational LOG/CYCLE/CYCLE.h events.",
     )
-    inspect_cycle.add_argument("path", type=Path, help="Path to a .CYCLE.h file.")
+    inspect_cycle.add_argument(
+        "path",
+        type=Path,
+        help="Path to a LOG, CYCLE, or CYCLE.h file.",
+    )
     inspect_cycle.set_defaults(handler=_handle_inspect_cycle)
 
     return parser
@@ -60,7 +64,12 @@ def _handle_inspect_mer(args: argparse.Namespace) -> int:
 def _handle_inspect_cycle(args: argparse.Namespace) -> int:
     """Handle the inspect-cycle subcommand."""
 
-    for entry in iter_cycle_events(args.path):
+    for entry in iter_operational_log_entries(args.path):
         code_text = entry.code or "-"
-        print(f"{entry.time.isoformat()}\t{entry.subsystem}:{code_text}\t{entry.message}")
+        print(
+            f"{entry.time.isoformat()}\t"
+            f"{entry.source_kind}\t"
+            f"{entry.subsystem}:{code_text}\t"
+            f"{entry.message}"
+        )
     return 0

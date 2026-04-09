@@ -6,7 +6,7 @@ from mermaid_timeline.mer_raw import parse_mer_file
 
 
 def test_parse_mer_file_extracts_metadata_and_blocks() -> None:
-    path = Path("data/fixtures/0100_685864F3.MER")
+    path = Path("data/fixtures/467.174-T-0100/mer/0100_685864F3.MER")
     metadata, blocks = parse_mer_file(path)
 
     assert metadata.board == "452116600-A0"

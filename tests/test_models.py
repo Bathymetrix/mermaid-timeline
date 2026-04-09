@@ -5,9 +5,10 @@ from pathlib import Path
 
 from mermaid_timeline.models import (
     AcquisitionWindow,
-    CycleLogEntry,
+    EvidenceRecord,
     MerDataBlock,
     MerFileMetadata,
+    OperationalLogEntry,
     ProductCoverage,
     TimelineStatus,
 )
@@ -15,11 +16,12 @@ from mermaid_timeline.models import (
 
 def test_dataclasses_can_be_instantiated() -> None:
     source = Path("fixture")
-    entry = CycleLogEntry(
+    entry = OperationalLogEntry(
         time=datetime(2025, 1, 1, 0, 0, 0),
         subsystem="MRMAID",
         code="0002",
         message="acq started",
+        source_kind="log",
         raw_line="2025-01-01T00:00:00:[MRMAID,0002]acq started",
         source_file=source,
     )
@@ -56,6 +58,13 @@ def test_dataclasses_can_be_instantiated() -> None:
         data_payload=b"abc",
         source_file=source,
     )
+    evidence = EvidenceRecord(
+        kind="operational",
+        time=datetime(2025, 1, 1, 0, 0, 0),
+        source_kind="log",
+        source_file=source,
+        raw_text="2025-01-01T00:00:00:[MRMAID,0002]acq started",
+    )
     coverage = ProductCoverage(product_name="raw")
     status = TimelineStatus(kind="ok", detail="ready")
 
@@ -63,5 +72,6 @@ def test_dataclasses_can_be_instantiated() -> None:
     assert window.stop > window.start
     assert metadata.board == "452116600-A0"
     assert block.length_samples == 4448
+    assert evidence.kind == "operational"
     assert coverage.product_name == "raw"
     assert status.kind == "ok"

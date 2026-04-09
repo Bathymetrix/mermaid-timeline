@@ -7,7 +7,7 @@ from mermaid_timeline.cycle_raw import iter_cycle_events
 
 
 def test_extract_acquisition_windows_from_fixture() -> None:
-    path = Path("data/fixtures/0075_6858665E.CYCLE.h")
+    path = Path("data/fixtures/467.174-T-0100/log/0100_6858665E.LOG")
     windows = extract_acquisition_windows(iter_cycle_events(path))
 
     assert len(windows) >= 1
