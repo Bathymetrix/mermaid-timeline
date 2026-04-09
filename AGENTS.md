@@ -83,6 +83,7 @@ Mirror the upstream preprocess call order responsibly:
 - `concatenate_rbr_files(...)` may also be part of preprocessing, but should not force interpretation into the decode layer
 
 Do not call `database_update(...)` once per `BIN`; prefer a single explicit refresh before a batch decode workflow.
+Preflight should fail closed. If `database_update(...)` or any other preprocess preflight step reports an error, stop the workflow instead of continuing with stale or partial state.
 
 ### Operational Text Sources
 

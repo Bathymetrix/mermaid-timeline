@@ -54,10 +54,10 @@ if callable(database_update):
         check=False,
     )
     if result.returncode != 0:
-        stderr = result.stderr.strip()
-        stdout = result.stdout.strip()
-        detail = stderr or stdout or f"exit code {result.returncode}"
-        raise Bin2LogError(f"External decoder failed: {detail}")
+        raise Bin2LogError(
+            _format_subprocess_failure(result.returncode, result.stdout, result.stderr)
+        )
+    _raise_if_database_update_failed(result.stdout, result.stderr)
 
 
 def prepare_decode_workspace(
@@ -113,10 +113,11 @@ if callable(concatenate_rbr_files):
         check=False,
     )
     if result.returncode != 0:
-        stderr = result.stderr.strip()
-        stdout = result.stdout.strip()
-        detail = stderr or stdout or f"exit code {result.returncode}"
-        raise Bin2LogError(f"External decoder failed: {detail}")
+        raise Bin2LogError(
+            _format_subprocess_failure(result.returncode, result.stdout, result.stderr)
+        )
+    if refresh_database:
+        _raise_if_database_update_failed(result.stdout, result.stderr)
 
 
 def decode_workspace_logs(workdir: Path, *, config: Bin2LogConfig) -> list[Path]:
@@ -246,7 +247,29 @@ decrypt_all(workdir_str)
         check=False,
     )
     if result.returncode != 0:
-        stderr = result.stderr.strip()
-        stdout = result.stdout.strip()
-        detail = stderr or stdout or f"exit code {result.returncode}"
-        raise Bin2LogError(f"External decoder failed: {detail}")
+        raise Bin2LogError(
+            _format_subprocess_failure(result.returncode, result.stdout, result.stderr)
+        )
+
+
+def _raise_if_database_update_failed(stdout: str, stderr: str) -> None:
+    """Treat preprocess-reported database update problems as hard failures."""
+
+    combined = "\n".join(part for part in (stdout.strip(), stderr.strip()) if part)
+    problem_lines = [
+        line.strip()
+        for line in combined.splitlines()
+        if line.strip().startswith("Error ") or line.strip().startswith('Exception:')
+    ]
+    if problem_lines:
+        detail = "; ".join(problem_lines)
+        raise Bin2LogError(f"External decoder database update failed: {detail}")
+
+
+def _format_subprocess_failure(returncode: int, stdout: str, stderr: str) -> str:
+    """Format a subprocess failure message consistently."""
+
+    stderr_text = stderr.strip()
+    stdout_text = stdout.strip()
+    detail = stderr_text or stdout_text or f"exit code {returncode}"
+    return f"External decoder failed: {detail}"

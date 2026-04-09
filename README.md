@@ -13,6 +13,7 @@ The package intentionally separates decode, parsing, normalization-oriented extr
 - higher-level interpretation modules remain intentionally minimal for now
 
 For batch decode workflows, decoder database refresh should be treated as a separate preflight step rather than something repeated once per `BIN`.
+Preflight should fail closed: if the external preprocess database refresh or other preflight steps report an error, the workflow should stop rather than continue on stale or partial state.
 
 The long-term normalized record-family direction is:
 
