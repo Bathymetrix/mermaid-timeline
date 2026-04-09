@@ -110,6 +110,7 @@ Normalized record-family direction to keep in mind during cleanup and naming:
 - `operational_records`
 - `location_records`
 - `transmission_records`
+- `acquisition_records`
 - `mer_data_blocks`
 - `acquisition_intervals`
 - `measurement_records`
@@ -118,6 +119,13 @@ Normalized record-family direction to keep in mind during cleanup and naming:
 Do not fully implement these families unless the current code naturally supports them, but prefer names and module roles that leave room for this direction.
 
 For derived operational-family prototypes, no parsed `OperationalLogEntry` should disappear silently. Each parsed operational line must end up either in one or more derived family streams or in `unclassified_operational_records`.
+
+For acquisition evidence prototypes, preserve the distinction between exact transitions and state assertions:
+
+- `acq started` / `acq stopped` are transition evidence
+- `acq already started` / `acq already stopped` are assertion evidence
+
+Do not infer intervals from assertion lines in the normalization layer.
 
 Use `cycle` in names only when referring to the concrete derived artifact types `CYCLE` or `.CYCLE.h`. Shared parser and normalization surfaces should prefer `operational` naming instead.
 

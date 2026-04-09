@@ -33,6 +33,7 @@ def main() -> int:
 
     print(f"Processed {summary.total_records} parsed LOG records.")
     print(f"  operational_records.jsonl: {summary.operational_records}")
+    print(f"  acquisition_records.jsonl: {summary.acquisition_records}")
     print(f"  transmission_records.jsonl: {summary.transmission_records}")
     print(f"  measurement_records.jsonl: {summary.measurement_records}")
     print(
@@ -40,6 +41,15 @@ def main() -> int:
         f"{summary.unclassified_records}"
     )
 
+    print("Acquisition counts by state:")
+    for key, value in sorted(summary.acquisition_state_counts.items()):
+        print(f"  {key}: {value}")
+
+    print("Acquisition counts by evidence kind:")
+    for key, value in sorted(summary.acquisition_evidence_kind_counts.items()):
+        print(f"  {key}: {value}")
+
+    _print_acquisition_examples(summary.acquisition_examples)
     _print_examples("Transmission examples", summary.transmission_examples)
     _print_examples("Measurement examples", summary.measurement_examples)
     _print_examples("Unclassified examples", summary.unclassified_examples)
@@ -63,6 +73,24 @@ def _print_examples(title: str, records: list[dict[str, object]]) -> None:
         return
     for record in records:
         print(f"  - {record['time']} {record['message']}")
+
+
+def _print_acquisition_examples(
+    examples: dict[str, dict[str, object]],
+) -> None:
+    print("Acquisition examples:")
+    ordered_keys = [
+        "started:transition",
+        "stopped:transition",
+        "started:assertion",
+        "stopped:assertion",
+    ]
+    for key in ordered_keys:
+        record = examples.get(key)
+        if record is None:
+            print(f"  - {key}: (none)")
+            continue
+        print(f"  - {key}: {record['time']} {record['message']}")
 
 
 if __name__ == "__main__":
