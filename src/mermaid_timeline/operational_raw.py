@@ -21,7 +21,7 @@ def iter_operational_log_entries(path: Path) -> Iterator[OperationalLogEntry]:
 
     source_kind = _detect_source_kind(path)
 
-    with path.open("r", encoding="utf-8") as handle:
+    with path.open("r", encoding="utf-8", errors="replace") as handle:
         for raw_line in handle:
             line = raw_line.rstrip("\r\n")
             if not line.strip():

@@ -42,6 +42,18 @@ def test_iter_operational_log_entries_parses_cycle_h_text(tmp_path: Path) -> Non
     assert first_entry.subsystem == "PREPROCESS"
 
 
+def test_iter_operational_log_entries_replaces_invalid_utf8_bytes(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "sample.LOG"
+    path.write_bytes(b"1700000000:[MAIN  ,0007]bad\xffbyte\n")
+
+    first_entry = next(iter_operational_log_entries(path))
+
+    assert first_entry.message == "bad\ufffdbyte"
+    assert first_entry.source_kind == "log"
+
+
 def test_iter_cycle_events_remains_backward_compatible() -> None:
     path = Path("data/fixtures/467.174-T-0100/cycle/0075_6858665E.CYCLE")
     first_entry = next(iter_cycle_events(path))

@@ -112,8 +112,12 @@ Normalized record-family direction to keep in mind during cleanup and naming:
 - `transmission_records`
 - `mer_data_blocks`
 - `acquisition_intervals`
+- `measurement_records`
+- `unclassified_operational_records`
 
 Do not fully implement these families unless the current code naturally supports them, but prefer names and module roles that leave room for this direction.
+
+For derived operational-family prototypes, no parsed `OperationalLogEntry` should disappear silently. Each parsed operational line must end up either in one or more derived family streams or in `unclassified_operational_records`.
 
 Use `cycle` in names only when referring to the concrete derived artifact types `CYCLE` or `.CYCLE.h`. Shared parser and normalization surfaces should prefer `operational` naming instead.
 
@@ -187,6 +191,7 @@ Current fixture corpus note:
 - `data/fixtures/467.174-T-0100/` mirrors top-level canonical artifacts for float `467.174-T-0100`, grouped by artifact type for easier cross-checking.
 - Raw `BIN` and `MER` files in this fixture family are copied from `~/mermaid/server`.
 - Treat this fixture family as the primary local fixture corpus unless the user asks for a different source set.
+- `data/fixtures/log_examples_representative_06_0100/` is the current representative LOG subset for JSONL prototype work, and generated JSONL prototypes may live under its `jsonl_prototype/` subdirectory for inspection.
 
 ## Workflow Rules
 
