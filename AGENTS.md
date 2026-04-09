@@ -16,6 +16,7 @@
 - Never delete source raw files from their original path. This includes `.BIN`, `.MER`, and future raw formats such as `.vit`. If an external decoder is destructive, it must run only on copied files in a temporary workspace.
 - In the corpus, raw input data live in `server`, and manufacturer-produced output used for audit/reference comparison lives in `processed`.
 - Before writing a new audit workflow, first scan existing audit code for reusable logic and easy refactors instead of starting from a fresh script by default.
+- Keep code DRY. Check often for shared logic that should be refactored into reusable helpers, but verify behavior before and after any DRY-driven refactor instead of assuming equivalence.
 - When the user's intent is clear, rewrite their rules into cleaner internal guidance here rather than copying rough wording verbatim. If the intent is unclear, ask before recording the rule.
 - Always push back, disagree, or suggest a better alternative when warranted. Do not agree reflexively. When suggesting a different path, give the reason plainly and concretely.
 - Package license defaults to MIT. A root `LICENSE` file must exist.
