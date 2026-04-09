@@ -26,7 +26,7 @@
 
 ## Project Purpose
 
-`mermaid-timeline` is a Python package for conservative parsing of MERMAID timeline-related inputs.
+`mermaid-timeline` is a Python package for conservative parsing, decode adapters, discovery, audit, and normalization of MERMAID artifacts.
 
 Supported inputs currently include:
 
@@ -47,6 +47,8 @@ Do not add:
 - DET / REQ logic
 - higher-level timeline interpretation
 
+At this stage the package is primarily converting manufacturer formats into machine-parseable normalized record families while preserving provenance.
+
 ## Current Parsing Scope
 
 Canonical long-term source model:
@@ -61,6 +63,8 @@ Derived operational products:
 - processed `.CYCLE.h`
 
 Processed `.CYCLE` and `.CYCLE.h` remain supported as compatibility, reference, and comparison paths rather than canonical long-term primitives when raw `LOG` exists.
+
+Do not frame `LOG`/`BIN` as purely operational and `MER` as purely data. These containers can each carry mixed operational, location, transmission, and accounting signals. Distinguish them by source container and provenance, not by assuming clean semantic separation.
 
 Decode/parsing boundary:
 
@@ -87,6 +91,16 @@ Preserve source identity via `source_kind`:
 - `cycle_h`
 
 Do not collapse `LOG`, `CYCLE`, and `.CYCLE.h` into one canonical source during parsing. Preserve provenance even when their content overlaps.
+
+Normalized record-family direction to keep in mind during cleanup and naming:
+
+- `operational_records`
+- `location_records`
+- `transmission_records`
+- `mer_data_blocks`
+- `acquisition_intervals`
+
+Do not fully implement these families unless the current code naturally supports them, but prefer names and module roles that leave room for this direction.
 
 Acquisition windows may be extracted only from explicit:
 

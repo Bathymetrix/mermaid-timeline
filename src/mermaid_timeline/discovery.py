@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 
-"""Recursive discovery of raw MERMAID input files."""
+"""Recursive discovery of MERMAID source and reference artifact files."""
 
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ from typing import Iterator
 RAW_PATTERNS = {
     "bin": "*.BIN",
     "cycle": "*.CYCLE.h",
+    "cycle_emitted": "*.CYCLE",
+    "cycle_h": "*.CYCLE.h",
     "log": "*.LOG",
     "mer": "*.MER",
     "mer_env": "*.MER.env",
@@ -23,9 +25,21 @@ def iter_bin_files(root: Path) -> Iterator[Path]:
 
 
 def iter_cycle_files(root: Path) -> Iterator[Path]:
-    """Recursively yield all .CYCLE.h files under root."""
+    """Backward-compatible alias for iterating processed .CYCLE.h files."""
 
-    yield from iter_raw_inputs(root, kinds=("cycle",))
+    yield from iter_processed_cycle_h_files(root)
+
+
+def iter_emitted_cycle_files(root: Path) -> Iterator[Path]:
+    """Recursively yield emitted raw .CYCLE files under root."""
+
+    yield from iter_raw_inputs(root, kinds=("cycle_emitted",))
+
+
+def iter_processed_cycle_h_files(root: Path) -> Iterator[Path]:
+    """Recursively yield processed .CYCLE.h reference files under root."""
+
+    yield from iter_raw_inputs(root, kinds=("cycle_h",))
 
 
 def iter_log_files(root: Path) -> Iterator[Path]:
@@ -41,7 +55,13 @@ def iter_mer_files(root: Path) -> Iterator[Path]:
 
 
 def iter_mer_env_files(root: Path) -> Iterator[Path]:
-    """Recursively yield all .MER.env files under root."""
+    """Backward-compatible alias for iterating processed .MER.env files."""
+
+    yield from iter_processed_mer_env_files(root)
+
+
+def iter_processed_mer_env_files(root: Path) -> Iterator[Path]:
+    """Recursively yield processed .MER.env reference files under root."""
 
     yield from iter_raw_inputs(root, kinds=("mer_env",))
 
@@ -55,7 +75,7 @@ def iter_server_mer(root: Path) -> Iterator[Path]:
 def iter_processed_cycle(root: Path) -> Iterator[Path]:
     """Semantic alias for iterating processed .CYCLE.h reference files."""
 
-    yield from iter_cycle_files(root)
+    yield from iter_processed_cycle_h_files(root)
 
 
 def iter_raw_inputs(
@@ -64,7 +84,7 @@ def iter_raw_inputs(
     kinds: tuple[str, ...] = ("cycle", "mer"),
     sort: bool = False,
 ) -> Iterator[Path]:
-    """Recursively yield raw input files under root."""
+    """Recursively yield selected artifact files under root."""
 
     _validate_root(root)
     patterns = [RAW_PATTERNS[kind] for kind in kinds]

@@ -2,7 +2,11 @@
 
 from pathlib import Path
 
-from mermaid_timeline.audit import audit_processed_cycle, audit_server_mer
+from mermaid_timeline.audit import (
+    audit_processed_cycle,
+    audit_processed_cycle_h,
+    audit_server_mer,
+)
 
 
 def test_audit_server_mer_counts_empty_and_non_empty_files(tmp_path: Path) -> None:
@@ -42,6 +46,21 @@ def test_audit_processed_cycle_counts_parse_failures(tmp_path: Path) -> None:
     assert stats.total_files == 2
     assert stats.parsed_ok == 1
     assert stats.parse_failures == 1
+
+
+def test_audit_processed_cycle_h_alias_counts_parse_failures(tmp_path: Path) -> None:
+    root = tmp_path / "processed"
+    root.mkdir()
+    (root / "0001_ABCDEF01.CYCLE.h").write_text(
+        "2025-01-01T00:00:00:[PREPROCESS]Create 0001_ABCDEF01.LOG\n",
+        encoding="utf-8",
+    )
+
+    stats = audit_processed_cycle_h(root)
+
+    assert stats.total_files == 1
+    assert stats.parsed_ok == 1
+    assert stats.parse_failures == 0
 
 
 def _write_mer(path: Path, *, event_payloads: list[bytes]) -> None:

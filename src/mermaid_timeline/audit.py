@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: MIT
 
-"""Corpus audit helpers built on top of discovery and raw parsing."""
+"""Corpus audit helpers built on top of discovery and parsing."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 
-from .cycle_raw import iter_cycle_events
-from .discovery import iter_cycle_files, iter_mer_files
+from .cycle_raw import iter_operational_log_entries
+from .discovery import iter_mer_files, iter_processed_cycle_h_files
 from .mer_raw import parse_mer_file
 
 
@@ -24,7 +24,7 @@ class MerCorpusStats:
 
 @dataclass(slots=True)
 class CycleCorpusStats:
-    """Summary counts for a corpus of processed .CYCLE.h files."""
+    """Summary counts for a corpus of processed .CYCLE.h reference files."""
 
     total_files: int
     parsed_ok: int
@@ -57,16 +57,22 @@ def audit_server_mer(root: Path) -> MerCorpusStats:
 
 
 def audit_processed_cycle(root: Path) -> CycleCorpusStats:
-    """Audit a processed cycle corpus rooted at ``root``."""
+    """Backward-compatible alias for auditing processed .CYCLE.h files."""
+
+    return audit_processed_cycle_h(root)
+
+
+def audit_processed_cycle_h(root: Path) -> CycleCorpusStats:
+    """Audit a processed .CYCLE.h reference corpus rooted at ``root``."""
 
     total_files = 0
     parsed_ok = 0
     parse_failures = 0
 
-    for path in iter_cycle_files(root):
+    for path in iter_processed_cycle_h_files(root):
         total_files += 1
         try:
-            for _ in iter_cycle_events(path):
+            for _ in iter_operational_log_entries(path):
                 pass
         except Exception:
             parse_failures += 1
