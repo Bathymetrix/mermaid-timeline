@@ -254,3 +254,64 @@ Additional rule:
 
 - keep module names lowercase
 - use underscores only when needed for readability
+
+## Normalization Guardrails
+
+This package is a canonical normalization layer, not an analysis layer.
+
+These rules override convenience or refactoring instincts.
+
+### Source fidelity
+- Always preserve the original source representation
+- Always include the raw source line or block where applicable
+- Do not drop, merge, or reinterpret source records silently
+
+### Provenance
+Every record must preserve:
+- source_container
+- source_file
+- source ordering (line index, block index when applicable)
+
+### Time handling
+- Never omit a source time field when it exists
+- Do not invent timestamps
+- Do not rename source time fields to generic names
+- Use source-literal names (e.g., DATE → date, LOG epoch → log_epoch_time)
+- Only introduce derived time fields when clearly justified (e.g., LOG record_time)
+
+### Field naming
+- Prefer source-literal field names when they exist
+- Do not introduce prefixes (e.g., info_, format_) unless required to avoid collision
+- Avoid generic names like "time" when the source has a more specific meaning
+
+### Record design
+- One JSONL record should correspond to one real source unit:
+  - LOG line
+  - ENVIRONMENT line
+  - PARAMETERS line
+  - EVENT block
+- Do not aggregate multiple source units into one record
+
+### Normalization scope
+- Normalize structure, not meaning
+- Do not:
+  - infer DET vs REQ
+  - infer dive membership
+  - compute durations or intervals
+  - interpret scientific meaning
+
+### JSONL discipline
+- Prefer multiple small, precise record streams over large aggregated ones
+- Do not create a new JSONL stream unless:
+  - the meaning is stable
+  - the classification is unambiguous
+  - it is immediately useful
+
+### Anti-overengineering rule
+When choosing between:
+- a simple, source-faithful representation
+- a generalized or abstract design
+
+Always choose the simple, source-faithful representation.
+
+Future layers (SQLite, APIs, analysis tools) are responsible for abstraction.
