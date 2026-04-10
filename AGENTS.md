@@ -270,7 +270,7 @@ These rules override convenience or refactoring instincts.
 Every record must preserve:
 - source_container
 - source_file
-- source ordering (line index, block index when applicable)
+- source ordering when it is genuinely useful (e.g., `block_index` for MER event-block records)
 
 ### Time handling
 - Never omit a source time field when it exists
