@@ -49,6 +49,8 @@ from .models import (
     TimelineStatus,
 )
 from .mer_raw import iter_mer_data_blocks, parse_mer_file
+from .normalize_log import LogJsonlPrototypeSummary, write_log_jsonl_prototypes
+from .normalize_mer import MerJsonlPrototypeSummary, write_mer_jsonl_prototypes
 
 __all__ = [
     "AcquisitionWindow",
@@ -61,9 +63,11 @@ __all__ = [
     "MerCorpusStats",
     "MerDataBlock",
     "MerFileMetadata",
+    "MerJsonlPrototypeSummary",
     "OperationalLogEntry",
     "ProductCoverage",
     "TimelineStatus",
+    "LogJsonlPrototypeSummary",
     "audit_processed_cycle",
     "audit_processed_cycle_h",
     "audit_server_mer",
@@ -85,4 +89,6 @@ __all__ = [
     "iter_raw_inputs",
     "iter_server_mer",
     "parse_mer_file",
+    "write_log_jsonl_prototypes",
+    "write_mer_jsonl_prototypes",
 ]

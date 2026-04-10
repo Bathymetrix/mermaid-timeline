@@ -216,6 +216,7 @@ Current fixture corpus note:
 - Raw `BIN` and `MER` files in this fixture family are copied from `~/mermaid/server`.
 - Treat this fixture family as the primary local fixture corpus unless the user asks for a different source set.
 - `data/fixtures/log_examples_representative_06_0100/` is the current representative LOG subset for JSONL prototype work, and generated JSONL prototypes may live under its `jsonl_prototype/` subdirectory for inspection.
+- `data/fixtures/mer_examples_representative_06_0100/` is the current representative MER subset for JSONL prototype work, and generated MER JSONL prototypes may live under its `jsonl_prototype/` subdirectory for inspection.
 
 ## Workflow Rules
 

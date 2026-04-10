@@ -1,0 +1,371 @@
+# SPDX-License-Identifier: MIT
+
+"""MER-to-JSONL normalization helpers for provenance-preserving prototype outputs."""
+
+from __future__ import annotations
+
+from collections import Counter
+from dataclasses import dataclass
+import json
+from pathlib import Path
+import re
+from typing import Iterable
+
+from .mer_raw import parse_mer_file
+
+OUTPUT_FILENAMES = {
+    "environment": "mer_environment_records.jsonl",
+    "parameter": "mer_parameter_records.jsonl",
+    "data": "mer_data_records.jsonl",
+}
+
+_ATTR_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_\[\]]*)=([^\s>]+)")
+_BARE_TAG_RE = re.compile(r"^<(?P<tag>[A-Z0-9_]+)\s+(?P<value>[^>]+?)\s*/>$")
+
+_ENVIRONMENT_KIND_MAP = {
+    "BOARD": "board",
+    "SOFTWARE": "software",
+    "DIVE": "dive",
+    "POOL": "pool",
+    "GPSINFO": "gpsinfo",
+    "DRIFT": "drift",
+    "CLOCK": "clock",
+    "SAMPLE": "sample",
+    "TRUE_SAMPLE_FREQ": "true_sample_freq",
+}
+
+_PARAMETER_KIND_MAP = {
+    "ADC": "adc",
+    "INPUT_FILTER": "input_filter",
+    "STALTA": "stalta",
+    "EVENT_LEN": "event_len",
+    "RATING": "rating",
+    "CDF24": "cdf24",
+    "MODEL": "model",
+    "ASCEND_THRESH": "ascend_thresh",
+    "MISC": "misc",
+}
+
+_INFO_FIELDS = [
+    "DATE",
+    "PRESSURE",
+    "TEMPERATURE",
+    "CRITERION",
+    "SNR",
+    "TRIG",
+    "DETRIG",
+    "FNAME",
+    "SMP_OFFSET",
+    "TRUE_FS",
+]
+
+_FORMAT_FIELDS = [
+    "ENDIANNESS",
+    "BYTES_PER_SAMPLE",
+    "SAMPLING_RATE",
+    "STAGES",
+    "NORMALIZED",
+    "LENGTH",
+]
+
+
+@dataclass(slots=True)
+class MerJsonlPrototypeSummary:
+    """Summary of generated MER-derived JSONL prototype streams."""
+
+    environment_records: int
+    parameter_records: int
+    data_records: int
+    environment_kind_counts: dict[str, int]
+    parameter_kind_counts: dict[str, int]
+    total_mer_files: int
+    zero_event_files: int
+    total_event_blocks: int
+    unknown_environment_tags: list[str]
+    unknown_parameter_tags: list[str]
+    unknown_info_keys: list[str]
+    unknown_format_keys: list[str]
+    example_gpsinfo_environment: dict[str, object] | None
+    example_drift_environment: dict[str, object] | None
+    example_adc_parameter: dict[str, object] | None
+    example_model_parameter: dict[str, object] | None
+    example_data_with_fname: dict[str, object] | None
+    example_data_with_trigger_fields: dict[str, object] | None
+
+
+def write_mer_jsonl_prototypes(
+    mer_paths: Iterable[Path],
+    output_dir: Path,
+) -> MerJsonlPrototypeSummary:
+    """Write conservative MER-derived JSONL prototype streams."""
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_paths = {
+        name: output_dir / filename for name, filename in OUTPUT_FILENAMES.items()
+    }
+
+    environment_count = 0
+    parameter_count = 0
+    data_count = 0
+    environment_kind_counter: Counter[str] = Counter()
+    parameter_kind_counter: Counter[str] = Counter()
+    total_mer_files = 0
+    zero_event_files = 0
+    unknown_environment_tags: set[str] = set()
+    unknown_parameter_tags: set[str] = set()
+    unknown_info_keys: set[str] = set()
+    unknown_format_keys: set[str] = set()
+    example_gpsinfo_environment: dict[str, object] | None = None
+    example_drift_environment: dict[str, object] | None = None
+    example_adc_parameter: dict[str, object] | None = None
+    example_model_parameter: dict[str, object] | None = None
+    example_data_with_fname: dict[str, object] | None = None
+    example_data_with_trigger_fields: dict[str, object] | None = None
+
+    with (
+        output_paths["environment"].open("w", encoding="utf-8") as environment_handle,
+        output_paths["parameter"].open("w", encoding="utf-8") as parameter_handle,
+        output_paths["data"].open("w", encoding="utf-8") as data_handle,
+    ):
+        for path in sorted(Path(path) for path in mer_paths):
+            total_mer_files += 1
+            metadata, blocks = parse_mer_file(path)
+            float_id = _float_id(path)
+            if not blocks:
+                zero_event_files += 1
+
+            for line in metadata.raw_environment_lines:
+                record, tag_name = _build_environment_record(
+                    float_id=float_id,
+                    path=path,
+                    line=line,
+                )
+                _write_jsonl_line(environment_handle, record)
+                environment_count += 1
+                environment_kind_counter[record["environment_kind"]] += 1
+                if record["environment_kind"] == "unknown":
+                    unknown_environment_tags.add(tag_name)
+                if (
+                    example_gpsinfo_environment is None
+                    and record["environment_kind"] == "gpsinfo"
+                ):
+                    example_gpsinfo_environment = record
+                if (
+                    example_drift_environment is None
+                    and record["environment_kind"] == "drift"
+                ):
+                    example_drift_environment = record
+
+            for line in metadata.raw_parameter_lines:
+                record, tag_name = _build_parameter_record(
+                    float_id=float_id,
+                    path=path,
+                    line=line,
+                )
+                _write_jsonl_line(parameter_handle, record)
+                parameter_count += 1
+                parameter_kind_counter[record["parameter_kind"]] += 1
+                if record["parameter_kind"] == "unknown":
+                    unknown_parameter_tags.add(tag_name)
+                if example_adc_parameter is None and record["parameter_kind"] == "adc":
+                    example_adc_parameter = record
+                if (
+                    example_model_parameter is None
+                    and record["parameter_kind"] == "model"
+                ):
+                    example_model_parameter = record
+
+            for block_index, block in enumerate(blocks):
+                record, block_unknown_info_keys, block_unknown_format_keys = (
+                    _build_data_record(
+                        float_id=float_id,
+                        path=path,
+                        block_index=block_index,
+                        raw_info_line=block.raw_info_line,
+                        raw_format_line=block.raw_format_line,
+                        data_payload=block.data_payload,
+                    )
+                )
+                unknown_info_keys.update(block_unknown_info_keys)
+                unknown_format_keys.update(block_unknown_format_keys)
+                _write_jsonl_line(data_handle, record)
+                data_count += 1
+                if example_data_with_fname is None and record["fname"] is not None:
+                    example_data_with_fname = record
+                if (
+                    example_data_with_trigger_fields is None
+                    and record["pressure"] is not None
+                ):
+                    example_data_with_trigger_fields = record
+
+    if unknown_info_keys or unknown_format_keys:
+        details: list[str] = []
+        if unknown_info_keys:
+            details.append(
+                "INFO keys: " + ", ".join(sorted(unknown_info_keys))
+            )
+        if unknown_format_keys:
+            details.append(
+                "FORMAT keys: " + ", ".join(sorted(unknown_format_keys))
+            )
+        raise ValueError("Unhandled MER event fields observed: " + "; ".join(details))
+
+    return MerJsonlPrototypeSummary(
+        environment_records=environment_count,
+        parameter_records=parameter_count,
+        data_records=data_count,
+        environment_kind_counts=dict(environment_kind_counter),
+        parameter_kind_counts=dict(parameter_kind_counter),
+        total_mer_files=total_mer_files,
+        zero_event_files=zero_event_files,
+        total_event_blocks=data_count,
+        unknown_environment_tags=sorted(unknown_environment_tags),
+        unknown_parameter_tags=sorted(unknown_parameter_tags),
+        unknown_info_keys=sorted(unknown_info_keys),
+        unknown_format_keys=sorted(unknown_format_keys),
+        example_gpsinfo_environment=example_gpsinfo_environment,
+        example_drift_environment=example_drift_environment,
+        example_adc_parameter=example_adc_parameter,
+        example_model_parameter=example_model_parameter,
+        example_data_with_fname=example_data_with_fname,
+        example_data_with_trigger_fields=example_data_with_trigger_fields,
+    )
+
+
+def _build_environment_record(
+    *,
+    float_id: str,
+    path: Path,
+    line: str,
+) -> tuple[dict[str, object], str]:
+    stripped_line = line.strip()
+    tag_name = _tag_name(stripped_line)
+    environment_kind = _ENVIRONMENT_KIND_MAP.get(tag_name, "unknown")
+    attrs = _parse_attributes(stripped_line)
+    raw_values = _environment_raw_values(tag_name, stripped_line, attrs)
+    return (
+        {
+            "float_id": float_id,
+            "source_container": "mer",
+            "source_file": path.as_posix(),
+            "environment_kind": environment_kind,
+            "gpsinfo_date": attrs.get("DATE") if tag_name == "GPSINFO" else None,
+            "raw_values": raw_values,
+            "line": line,
+        },
+        tag_name,
+    )
+
+
+def _build_parameter_record(
+    *,
+    float_id: str,
+    path: Path,
+    line: str,
+) -> tuple[dict[str, object], str]:
+    stripped_line = line.strip()
+    tag_name = _tag_name(stripped_line)
+    parameter_kind = _PARAMETER_KIND_MAP.get(tag_name, "unknown")
+    attrs = _parse_attributes(stripped_line)
+    raw_values = {key.lower(): value for key, value in attrs.items()} or None
+    return (
+        {
+            "float_id": float_id,
+            "source_container": "mer",
+            "source_file": path.as_posix(),
+            "parameter_kind": parameter_kind,
+            "raw_values": raw_values,
+            "line": line,
+        },
+        tag_name,
+    )
+
+
+def _build_data_record(
+    *,
+    float_id: str,
+    path: Path,
+    block_index: int,
+    raw_info_line: str | None,
+    raw_format_line: str | None,
+    data_payload: bytes | None,
+) -> tuple[dict[str, object], set[str], set[str]]:
+    info_attrs = _parse_attributes(raw_info_line)
+    format_attrs = _parse_attributes(raw_format_line)
+    unknown_info_keys = set(info_attrs) - set(_INFO_FIELDS)
+    unknown_format_keys = set(format_attrs) - set(_FORMAT_FIELDS)
+
+    record = {
+        "float_id": float_id,
+        "source_container": "mer",
+        "source_file": path.as_posix(),
+        "block_index": block_index,
+        "date": info_attrs.get("DATE"),
+        "pressure": info_attrs.get("PRESSURE"),
+        "temperature": info_attrs.get("TEMPERATURE"),
+        "criterion": info_attrs.get("CRITERION"),
+        "snr": info_attrs.get("SNR"),
+        "trig": info_attrs.get("TRIG"),
+        "detrig": info_attrs.get("DETRIG"),
+        "fname": info_attrs.get("FNAME"),
+        "smp_offset": info_attrs.get("SMP_OFFSET"),
+        "true_fs": info_attrs.get("TRUE_FS"),
+        "endianness": format_attrs.get("ENDIANNESS"),
+        "bytes_per_sample": format_attrs.get("BYTES_PER_SAMPLE"),
+        "sampling_rate": format_attrs.get("SAMPLING_RATE"),
+        "stages": format_attrs.get("STAGES"),
+        "normalized": format_attrs.get("NORMALIZED"),
+        "length": format_attrs.get("LENGTH"),
+        "data_payload_nbytes": len(data_payload) if data_payload is not None else 0,
+        "raw_info_line": raw_info_line,
+        "raw_format_line": raw_format_line,
+    }
+    return record, unknown_info_keys, unknown_format_keys
+
+
+def _environment_raw_values(
+    tag_name: str,
+    line: str,
+    attrs: dict[str, str],
+) -> dict[str, str] | None:
+    if tag_name == "BOARD":
+        value = _parse_bare_tag_value(line, tag_name)
+        return {"board": value} if value is not None else None
+    if tag_name == "SOFTWARE":
+        value = _parse_bare_tag_value(line, tag_name)
+        return {"software": value} if value is not None else None
+    if attrs:
+        return {key.lower(): value for key, value in attrs.items()}
+    value = _parse_bare_tag_value(line, tag_name)
+    if value is None:
+        return None
+    return {tag_name.lower(): value}
+
+
+def _tag_name(line: str) -> str:
+    match = re.match(r"^<(?P<tag>[A-Z0-9_]+)\b", line)
+    if match is None:
+        return "UNKNOWN"
+    return match.group("tag")
+
+
+def _parse_attributes(line: str | None) -> dict[str, str]:
+    if line is None:
+        return {}
+    return {key: value for key, value in _ATTR_RE.findall(line)}
+
+
+def _parse_bare_tag_value(line: str, tag_name: str) -> str | None:
+    match = _BARE_TAG_RE.match(line)
+    if match is None or match.group("tag") != tag_name:
+        return None
+    return match.group("value")
+
+
+def _float_id(path: Path) -> str:
+    return path.stem.split("_", maxsplit=1)[0]
+
+
+def _write_jsonl_line(handle, record: dict[str, object]) -> None:
+    handle.write(json.dumps(record, sort_keys=True))
+    handle.write("\n")

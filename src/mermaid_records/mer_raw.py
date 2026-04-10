@@ -93,20 +93,21 @@ def _parse_metadata(path: Path, data: bytes) -> MerFileMetadata:
     )
 
     for line in environment_lines:
-        if line.startswith("<BOARD "):
-            metadata.board = _parse_bare_tag_value(line, "BOARD")
-        elif line.startswith("<SOFTWARE "):
-            metadata.software_version = _parse_bare_tag_value(line, "SOFTWARE")
-        elif line.startswith("<DIVE "):
-            attrs = _parse_attributes(line)
+        stripped_line = line.strip()
+        if stripped_line.startswith("<BOARD "):
+            metadata.board = _parse_bare_tag_value(stripped_line, "BOARD")
+        elif stripped_line.startswith("<SOFTWARE "):
+            metadata.software_version = _parse_bare_tag_value(stripped_line, "SOFTWARE")
+        elif stripped_line.startswith("<DIVE "):
+            attrs = _parse_attributes(stripped_line)
             metadata.dive_id = _parse_int(attrs.get("ID"))
             metadata.dive_event_count = _parse_int(attrs.get("EVENTS"))
-        elif line.startswith("<POOL "):
-            attrs = _parse_attributes(line)
+        elif stripped_line.startswith("<POOL "):
+            attrs = _parse_attributes(stripped_line)
             metadata.pool_event_count = _parse_int(attrs.get("EVENTS"))
             metadata.pool_size_bytes = _parse_int(attrs.get("SIZE"))
-        elif line.startswith("<GPSINFO "):
-            attrs = _parse_attributes(line)
+        elif stripped_line.startswith("<GPSINFO "):
+            attrs = _parse_attributes(stripped_line)
             metadata.gps_fixes.append(
                 {
                     "date": attrs.get("DATE", ""),
@@ -114,25 +115,25 @@ def _parse_metadata(path: Path, data: bytes) -> MerFileMetadata:
                     "lon": attrs.get("LON", ""),
                 }
             )
-        elif line.startswith("<DRIFT "):
-            attrs = _parse_attributes(line)
+        elif stripped_line.startswith("<DRIFT "):
+            attrs = _parse_attributes(stripped_line)
             metadata.drifts.append(
                 {
                     "sec": _parse_int(attrs.get("SEC")),
                     "usec": _parse_int(attrs.get("USEC")),
                 }
             )
-        elif line.startswith("<CLOCK "):
-            attrs = _parse_attributes(line)
+        elif stripped_line.startswith("<CLOCK "):
+            attrs = _parse_attributes(stripped_line)
             hz = _parse_int(attrs.get("Hz"))
             if hz is not None:
                 metadata.clock_frequencies_hz.append(hz)
-        elif line.startswith("<SAMPLE "):
-            attrs = _parse_attributes(line)
+        elif stripped_line.startswith("<SAMPLE "):
+            attrs = _parse_attributes(stripped_line)
             metadata.sample_min = _parse_int(attrs.get("MIN"))
             metadata.sample_max = _parse_int(attrs.get("MAX"))
-        elif line.startswith("<TRUE_SAMPLE_FREQ "):
-            attrs = _parse_attributes(line)
+        elif stripped_line.startswith("<TRUE_SAMPLE_FREQ "):
+            attrs = _parse_attributes(stripped_line)
             metadata.true_sample_freq_hz = _parse_float(attrs.get("FS_Hz"))
 
     return metadata
@@ -151,7 +152,7 @@ def _split_tag_lines(section: bytes) -> list[str]:
     """Split a decoded section into non-empty raw tag lines."""
 
     text = section.decode("ascii", "ignore")
-    return [line.strip() for line in text.splitlines() if line.strip()]
+    return [line for line in text.splitlines() if line.strip()]
 
 
 def _extract_tag_line(event_body: bytes, pattern: re.Pattern[bytes]) -> str | None:
@@ -160,7 +161,7 @@ def _extract_tag_line(event_body: bytes, pattern: re.Pattern[bytes]) -> str | No
     match = pattern.search(event_body)
     if match is None:
         return None
-    return match.group(0).decode("ascii", "ignore").strip()
+    return match.group(0).decode("ascii", "ignore")
 
 
 def _extract_payload(event_body: bytes) -> bytes | None:

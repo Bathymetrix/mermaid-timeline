@@ -82,7 +82,7 @@ def _print_examples(title: str, records: list[dict[str, object]]) -> None:
         print("  (none)")
         return
     for record in records:
-        print(f"  - {record['time']} {record['message']}")
+        print(f"  - {record['record_time']} {record['message']}")
 
 
 def _print_acquisition_examples(
@@ -100,7 +100,7 @@ def _print_acquisition_examples(
         if record is None:
             print(f"  - {key}: (none)")
             continue
-        print(f"  - {key}: {record['time']} {record['message']}")
+        print(f"  - {key}: {record['record_time']} {record['message']}")
 
 
 def _print_ascent_request_examples(
@@ -112,7 +112,7 @@ def _print_ascent_request_examples(
         if record is None:
             print(f"  - {key}: (none)")
             continue
-        print(f"  - {key}: {record['time']} {record['message']}")
+        print(f"  - {key}: {record['record_time']} {record['message']}")
 
 
 def _print_gps_examples(
@@ -124,7 +124,7 @@ def _print_gps_examples(
         if record is None:
             print(f"  - {key}: (none)")
             continue
-        print(f"  - {key}: {record['time']} {record['message']}")
+        print(f"  - {key}: {record['record_time']} {record['message']}")
 
 
 if __name__ == "__main__":

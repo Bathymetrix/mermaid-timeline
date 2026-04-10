@@ -137,7 +137,8 @@ def write_log_jsonl_prototypes(
                     has_measurement=measurement_record is not None,
                 )
                 operational_record = {
-                    "time": entry.time.isoformat(),
+                    "record_time": entry.time.isoformat(),
+                    "log_epoch_time": _log_epoch_time(entry),
                     "float_id": _float_id(entry.source_file),
                     "source_container": "log",
                     "source_file": entry.source_file.as_posix(),
@@ -203,7 +204,8 @@ def write_log_jsonl_prototypes(
 
                 if not classified:
                     unclassified_record = {
-                        "time": entry.time.isoformat(),
+                        "record_time": entry.time.isoformat(),
+                        "log_epoch_time": _log_epoch_time(entry),
                         "float_id": _float_id(entry.source_file),
                         "source_container": "log",
                         "source_file": entry.source_file.as_posix(),
@@ -305,7 +307,8 @@ def _classify_acquisition(entry: OperationalLogEntry) -> dict[str, object] | Non
 
     acquisition_state, acquisition_evidence_kind = details
     return {
-        "time": entry.time.isoformat(),
+        "record_time": entry.time.isoformat(),
+        "log_epoch_time": _log_epoch_time(entry),
         "float_id": _float_id(entry.source_file),
         "source_container": "log",
         "source_file": entry.source_file.as_posix(),
@@ -329,7 +332,8 @@ def _classify_ascent_request(entry: OperationalLogEntry) -> dict[str, object] | 
         return None
 
     return {
-        "time": entry.time.isoformat(),
+        "record_time": entry.time.isoformat(),
+        "log_epoch_time": _log_epoch_time(entry),
         "float_id": _float_id(entry.source_file),
         "source_container": "log",
         "source_file": entry.source_file.as_posix(),
@@ -379,7 +383,8 @@ def _classify_gps(entry: OperationalLogEntry) -> dict[str, object] | None:
         return None
 
     return {
-        "time": entry.time.isoformat(),
+        "record_time": entry.time.isoformat(),
+        "log_epoch_time": _log_epoch_time(entry),
         "float_id": _float_id(entry.source_file),
         "source_container": "log",
         "source_file": entry.source_file.as_posix(),
@@ -396,7 +401,8 @@ def _classify_transmission(entry: OperationalLogEntry) -> dict[str, object] | No
     message = entry.message
     if "Upload data files" in message:
         return {
-            "time": entry.time.isoformat(),
+            "record_time": entry.time.isoformat(),
+            "log_epoch_time": _log_epoch_time(entry),
             "float_id": _float_id(entry.source_file),
             "source_container": "log",
             "source_file": entry.source_file.as_posix(),
@@ -414,7 +420,8 @@ def _classify_transmission(entry: OperationalLogEntry) -> dict[str, object] | No
         return None
 
     return {
-        "time": entry.time.isoformat(),
+        "record_time": entry.time.isoformat(),
+        "log_epoch_time": _log_epoch_time(entry),
         "float_id": _float_id(entry.source_file),
         "source_container": "log",
         "source_file": entry.source_file.as_posix(),
@@ -480,7 +487,8 @@ def _classify_measurement(entry: OperationalLogEntry) -> dict[str, object] | Non
         return None
 
     return {
-        "time": entry.time.isoformat(),
+        "record_time": entry.time.isoformat(),
+        "log_epoch_time": _log_epoch_time(entry),
         "float_id": _float_id(entry.source_file),
         "source_container": "log",
         "source_file": entry.source_file.as_posix(),
@@ -495,6 +503,10 @@ def _classify_measurement(entry: OperationalLogEntry) -> dict[str, object] | Non
 
 def _float_id(path: Path) -> str:
     return path.stem.split("_", maxsplit=1)[0]
+
+
+def _log_epoch_time(entry: OperationalLogEntry) -> str:
+    return entry.raw_line.split(":", maxsplit=1)[0]
 
 
 def _write_jsonl_line(handle, record: dict[str, object]) -> None:
