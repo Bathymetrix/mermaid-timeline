@@ -136,3 +136,7 @@ def _handle_normalize(args: argparse.Namespace) -> int:
     )
     print(json.dumps(summary.to_dict(), sort_keys=True))
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
