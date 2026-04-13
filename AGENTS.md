@@ -317,3 +317,10 @@ When choosing between:
 Always choose the simple, source-faithful representation.
 
 Future layers (SQLite, APIs, analysis tools) are responsible for abstraction.
+
+## Queue
+
+- Next rerun-detection step should compare current source/decoder state against `manifests/latest.json` at the whole-run level before any selective skipping work.
+- In mixed multi-float server corpora, decoder-state changes should invalidate only floats that actually depend on `BIN` decode; LOG/MER-only floats should not be forced to rerun from raw solely because decoder state changed.
+- We still need to design per-file incremental updates. Desired future behavior: if only a small subset of raw `LOG`/`MER`/`BIN` inputs change, the pipeline should be able to normalize only the affected files rather than discarding and rebuilding all outputs.
+- Open question for later: whether this package should accept an explicit decoder database directory override instead of relying only on `MERMAID/database`.
