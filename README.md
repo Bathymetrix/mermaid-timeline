@@ -55,6 +55,7 @@ The `normalize` command writes:
 
 - `log_jsonl/`
 - `mer_jsonl/`
+- `manifests/`
 - `preflight_status.json` when BIN decode preflight runs
 
 ## Decoder Requirements
