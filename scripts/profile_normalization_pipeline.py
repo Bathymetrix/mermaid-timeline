@@ -66,6 +66,12 @@ def main() -> int:
         default=None,
         help="Path to external preprocess.py decoder script.",
     )
+    parser.add_argument(
+        "--preflight-mode",
+        choices=("strict", "cached"),
+        default="strict",
+        help="BIN decode preflight policy: strict requires successful live refresh; cached warns and continues on cached decoder state.",
+    )
     args = parser.parse_args()
 
     config = None
@@ -75,6 +81,7 @@ def main() -> int:
         config = Bin2LogConfig(
             python_executable=args.decoder_python,
             decoder_script=args.decoder_script,
+            preflight_mode=args.preflight_mode,
         )
 
     summary = profile_pipeline(

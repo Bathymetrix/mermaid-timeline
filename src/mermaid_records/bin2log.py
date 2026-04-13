@@ -8,8 +8,12 @@ from dataclasses import dataclass
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
+from typing import Literal
 from typing import Iterator
+
+type BinDecodePreflightMode = Literal["strict", "cached"]
 
 
 @dataclass(slots=True)
@@ -18,6 +22,15 @@ class Bin2LogConfig:
 
     python_executable: Path
     decoder_script: Path
+    preflight_mode: BinDecodePreflightMode = "strict"
+
+    def __post_init__(self) -> None:
+        """Validate the configured preflight mode."""
+
+        if self.preflight_mode not in {"strict", "cached"}:
+            raise ValueError(
+                "preflight_mode must be one of: 'strict', 'cached'"
+            )
 
 
 class Bin2LogError(RuntimeError):
@@ -57,7 +70,11 @@ if callable(database_update):
         raise Bin2LogError(
             _format_subprocess_failure(result.returncode, result.stdout, result.stderr)
         )
-    _raise_if_database_update_failed(result.stdout, result.stderr)
+    _handle_database_update_result(
+        config.preflight_mode,
+        stdout=result.stdout,
+        stderr=result.stderr,
+    )
 
 
 def prepare_decode_workspace(
@@ -117,7 +134,11 @@ if callable(concatenate_rbr_files):
             _format_subprocess_failure(result.returncode, result.stdout, result.stderr)
         )
     if refresh_database:
-        _raise_if_database_update_failed(result.stdout, result.stderr)
+        _handle_database_update_result(
+            config.preflight_mode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+        )
 
 
 def decode_workspace_logs(workdir: Path, *, config: Bin2LogConfig) -> list[Path]:
@@ -252,8 +273,26 @@ decrypt_all(workdir_str)
         )
 
 
-def _raise_if_database_update_failed(stdout: str, stderr: str) -> None:
-    """Treat preprocess-reported database update problems as hard failures."""
+def _handle_database_update_result(
+    mode: BinDecodePreflightMode,
+    *,
+    stdout: str,
+    stderr: str,
+) -> None:
+    """Apply the configured preflight policy to database update output."""
+
+    problem_detail = _database_update_problem_detail(stdout, stderr)
+    if problem_detail is None:
+        return
+    if mode == "strict":
+        raise Bin2LogError(
+            f"External decoder database update failed: {problem_detail}"
+        )
+    _warn_cached_preflight(problem_detail)
+
+
+def _database_update_problem_detail(stdout: str, stderr: str) -> str | None:
+    """Extract preprocess-reported database update problems from subprocess output."""
 
     combined = "\n".join(part for part in (stdout.strip(), stderr.strip()) if part)
     problem_lines = [
@@ -261,9 +300,19 @@ def _raise_if_database_update_failed(stdout: str, stderr: str) -> None:
         for line in combined.splitlines()
         if line.strip().startswith("Error ") or line.strip().startswith('Exception:')
     ]
-    if problem_lines:
-        detail = "; ".join(problem_lines)
-        raise Bin2LogError(f"External decoder database update failed: {detail}")
+    if not problem_lines:
+        return None
+    return "; ".join(problem_lines)
+
+
+def _warn_cached_preflight(detail: str) -> None:
+    """Emit an explicit warning when cached preflight mode continues after refresh failure."""
+
+    print(
+        "WARNING: database_update failed; continuing in cached preflight mode: "
+        f"{detail}",
+        file=sys.stderr,
+    )
 
 
 def _format_subprocess_failure(returncode: int, stdout: str, stderr: str) -> str:

@@ -65,6 +65,12 @@ def main() -> int:
         help="Path to external preprocess.py decoder script.",
     )
     parser.add_argument(
+        "--preflight-mode",
+        choices=("strict", "cached"),
+        default="strict",
+        help="BIN decode preflight policy: strict requires successful live refresh; cached warns and continues on cached decoder state.",
+    )
+    parser.add_argument(
         "--report-json",
         type=Path,
         default=None,
@@ -81,6 +87,7 @@ def main() -> int:
     config = Bin2CycleConfig(
         python_executable=args.decoder_python,
         decoder_script=args.decoder_script,
+        preflight_mode=args.preflight_mode,
     )
 
     paths = iter_bin_files(args.bin_root)

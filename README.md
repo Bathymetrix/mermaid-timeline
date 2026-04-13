@@ -69,6 +69,15 @@ In practice this looks like:
 
 If automaid expects environment variables such as `MERMAID`, set them before running the decode-enabled scripts.
 
+BIN decode preflight supports exactly two modes:
+
+- `strict`
+  - default
+  - requires successful live `database_update(...)`
+- `cached`
+  - still attempts `database_update(...)`
+  - if refresh fails, emits a warning and continues using cached local decoder state
+
 ## Helper Scripts
 
 These scripts are repo helper entry points rather than installed package subcommands.
