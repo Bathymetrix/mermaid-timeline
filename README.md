@@ -12,11 +12,16 @@ The package keeps decode, parsing, normalization, and later interpretation separ
 
 ## Installation
 
-```bash
-pip install -e .[dev]
+Create a fresh local virtual environment from the repo root:
+
+```zsh
+/opt/homebrew/opt/python@3.14/bin/python3.14 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -e '.[dev]'
 ```
 
-If you use `zsh`, quote the extras spec so the shell does not treat brackets as a glob:
+If your shell already resolves `python` cleanly, the key editable install step is still:
 
 ```zsh
 python -m pip install -e '.[dev]'
