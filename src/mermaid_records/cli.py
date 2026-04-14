@@ -38,10 +38,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     input_group.add_argument(
         "--input-file",
-        type=Path,
+        nargs="+",
+        type=str,
         action="append",
         default=None,
-        help="Explicit raw source file to normalize in stateless mode. Repeat for multiple files.",
+        help="Explicit raw source file(s) to normalize in stateless mode. Accepts comma-separated and/or space-separated lists.",
     )
     normalize.add_argument(
         "-o",
@@ -99,10 +100,26 @@ def _handle_normalize(args: argparse.Namespace) -> int:
         args.input_root,
         output_dir=args.output_dir,
         config=config,
-        input_files=args.input_file,
+        input_files=_parse_input_files(args.input_file),
     )
     print(json.dumps(summary.to_dict(), sort_keys=True))
     return 0
+
+
+def _parse_input_files(values: list[list[str]] | None) -> list[Path] | None:
+    """Flatten repeated --input-file arguments into a list of paths."""
+
+    if not values:
+        return None
+
+    paths: list[Path] = []
+    for group in values:
+        for item in group:
+            for token in item.split(","):
+                token = token.strip()
+                if token:
+                    paths.append(Path(token))
+    return paths
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ def test_cli_help_exposes_only_normalize_subcommand() -> None:
 
 
 def test_normalize_cli_writes_log_and_mer_jsonl_outputs(tmp_path: Path, capsys) -> None:
-    input_root = tmp_path / "inputs"
+    input_root = tmp_path / "467.174-T-0100"
     input_root.mkdir()
 
     log_path = input_root / "0100_sample.LOG"
@@ -65,6 +65,39 @@ def test_normalize_cli_writes_log_and_mer_jsonl_outputs(tmp_path: Path, capsys) 
     assert payload["output_dir"] == output_dir.as_posix()
     assert payload["mode"] == "stateful"
     assert payload["processed_floats"][0]["float_id"] == "0100"
-    assert (output_dir / "0100" / "log_operational_records.jsonl").exists()
-    assert (output_dir / "0100" / "mer_environment_records.jsonl").exists()
-    assert not (output_dir / "0100" / "preflight_status.json").exists()
+    assert (output_dir / "467.174-T-0100" / "log_operational_records.jsonl").exists()
+    assert (output_dir / "467.174-T-0100" / "mer_environment_records.jsonl").exists()
+    assert not (output_dir / "467.174-T-0100" / "preflight_status.json").exists()
+
+
+def test_normalize_cli_accepts_comma_and_space_separated_input_files(tmp_path: Path, capsys) -> None:
+    log_a = tmp_path / "0100_a.LOG"
+    log_b = tmp_path / "0100_b.LOG"
+    log_c = tmp_path / "0100_c.LOG"
+    log_a.write_text("1700000000:[MAIN  ,0007]buoy 467.174-T-0100\n", encoding="utf-8")
+    log_b.write_text("1700000001:[MAIN  ,0007]second\n", encoding="utf-8")
+    log_c.write_text("1700000002:[MAIN  ,0007]third\n", encoding="utf-8")
+
+    output_dir = tmp_path / "output"
+    result = main(
+        [
+            "normalize",
+            "--input-file",
+            f"{log_a},{log_b}",
+            str(log_c),
+            "-o",
+            str(output_dir),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert result == 0
+    assert payload["mode"] == "stateless"
+    assert payload["input_files"] == [
+        log_a.as_posix(),
+        log_b.as_posix(),
+        log_c.as_posix(),
+    ]
+    assert (output_dir / "467.174-T-0100" / "log_operational_records.jsonl").exists()

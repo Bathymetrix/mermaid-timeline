@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
+import re
 import shutil
 import sys
 import tempfile
@@ -89,10 +90,8 @@ def _run_stateful(
         [*sorted(iter_bin_files(input_root)), *sorted(iter_log_files(input_root)), *sorted(iter_mer_files(input_root))]
     )
     output_dir.mkdir(parents=True, exist_ok=True)
-    previous_float_ids = {
-        path.parent.parent.name for path in output_dir.glob("*/manifests/latest.json")
-    }
-    all_float_ids = sorted(set(grouped_sources) | previous_float_ids)
+    previous_outputs = _previous_outputs_by_float_id(output_dir)
+    all_float_ids = sorted(set(grouped_sources) | set(previous_outputs))
     processed_floats: list[FloatRunSummary] = []
     normalization_version = _normalization_version()
 
@@ -101,7 +100,15 @@ def _run_stateful(
         if any(path.suffix.upper() == ".BIN" for path in current_sources) and config is None:
             raise ValueError("decoder config is required when BIN inputs are present")
 
-        float_output_dir = output_dir / float_id
+        previous_output_dir = previous_outputs.get(float_id)
+        float_output_name = _float_output_name(
+            float_id=float_id,
+            paths=current_sources,
+            input_root=input_root,
+            previous_output_dir=previous_output_dir,
+        )
+        float_output_dir = output_dir / float_output_name
+        _migrate_output_dir(previous_output_dir, float_output_dir)
         previous_state = latest_source_state(float_output_dir)
         current_state = build_source_state(
             raw_source_paths=current_sources,
@@ -205,7 +212,12 @@ def _run_stateless(
     for float_id, current_sources in sorted(grouped_sources.items()):
         if any(path.suffix.upper() == ".BIN" for path in current_sources) and config is None:
             raise ValueError("decoder config is required when BIN inputs are present")
-        float_output_dir = output_dir / float_id
+        float_output_dir = output_dir / _float_output_name(
+            float_id=float_id,
+            paths=current_sources,
+            input_root=None,
+            previous_output_dir=None,
+        )
         _execute_log_family(
             float_output_dir=float_output_dir,
             action="append",
@@ -386,6 +398,92 @@ def _group_paths(paths: list[Path]) -> dict[str, list[Path]]:
 
 def _float_id(path: Path) -> str:
     return path.stem.split("_", maxsplit=1)[0]
+
+
+_SERIAL_RE = re.compile(r"^\d+\.\d+-[A-Z]+-\d+$")
+
+
+def _float_output_name(
+    *,
+    float_id: str,
+    paths: list[Path],
+    input_root: Path | None,
+    previous_output_dir: Path | None,
+) -> str:
+    if previous_output_dir is not None and _looks_like_full_serial(previous_output_dir.name):
+        return previous_output_dir.name
+    candidate = _discover_full_serial(paths=paths, input_root=input_root)
+    if candidate is not None:
+        return candidate
+    if previous_output_dir is not None:
+        return previous_output_dir.name
+    return float_id
+
+
+def _discover_full_serial(*, paths: list[Path], input_root: Path | None) -> str | None:
+    if input_root is not None and _looks_like_full_serial(input_root.name):
+        return input_root.name
+    for path in paths:
+        for ancestor in path.parents:
+            if input_root is not None and ancestor == input_root.parent:
+                break
+            if _looks_like_full_serial(ancestor.name):
+                return ancestor.name
+    for path in paths:
+        serial = _serial_from_log(path)
+        if serial is not None:
+            return serial
+    return None
+
+
+def _looks_like_full_serial(name: str) -> bool:
+    return _SERIAL_RE.match(name) is not None
+
+
+def _serial_from_log(path: Path) -> str | None:
+    if path.suffix.upper() != ".LOG" or not path.exists():
+        return None
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            for _ in range(32):
+                line = handle.readline()
+                if not line:
+                    break
+                if "]buoy " in line:
+                    candidate = line.split("]buoy ", maxsplit=1)[1].strip()
+                    if _looks_like_full_serial(candidate):
+                        return candidate
+                if "]board " in line:
+                    candidate = line.split("]board ", maxsplit=1)[1].strip()
+                    if _looks_like_full_serial(candidate):
+                        return candidate
+    except OSError:
+        return None
+    return None
+
+
+def _previous_outputs_by_float_id(output_dir: Path) -> dict[str, Path]:
+    previous: dict[str, Path] = {}
+    for latest_path in output_dir.glob("*/manifests/latest.json"):
+        float_output_dir = latest_path.parent.parent
+        state = latest_source_state(float_output_dir)
+        if state is None:
+            continue
+        raw_sources = state.get("raw_sources", [])
+        if not raw_sources:
+            continue
+        float_id = _float_id(Path(raw_sources[0]["source_file"]))
+        previous[float_id] = float_output_dir
+    return previous
+
+
+def _migrate_output_dir(previous_output_dir: Path | None, float_output_dir: Path) -> None:
+    if previous_output_dir is None or previous_output_dir == float_output_dir:
+        return
+    if not previous_output_dir.exists() or float_output_dir.exists():
+        return
+    float_output_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(previous_output_dir.as_posix(), float_output_dir.as_posix())
 
 
 def _selected_paths(paths: list[Path], kinds: set[str]) -> list[Path]:

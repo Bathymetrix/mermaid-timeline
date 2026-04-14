@@ -13,7 +13,7 @@ from mermaid_records.normalize_pipeline import run_normalization_pipeline
 
 
 def test_stateful_run_writes_per_float_outputs_and_manifests(tmp_path: Path) -> None:
-    input_root = tmp_path / "inputs"
+    input_root = tmp_path / "452.020-P-06"
     input_root.mkdir()
     _write_log(input_root / "0100_first.LOG", "first")
     _write_mer(input_root / "0100_first.MER")
@@ -21,7 +21,7 @@ def test_stateful_run_writes_per_float_outputs_and_manifests(tmp_path: Path) -> 
     output_root = tmp_path / "output"
     summary = run_normalization_pipeline(input_root, output_dir=output_root)
 
-    float_dir = output_root / "0100"
+    float_dir = output_root / "452.020-P-06"
     latest = _read_json(float_dir / "manifests" / "latest.json")
     run_json = _read_json(float_dir / latest["run_manifest"])
     source_state = _read_json(float_dir / latest["source_state_manifest"])
@@ -37,7 +37,7 @@ def test_stateful_run_writes_per_float_outputs_and_manifests(tmp_path: Path) -> 
 
 
 def test_stateful_append_path_appends_only_new_files(tmp_path: Path) -> None:
-    input_root = tmp_path / "inputs"
+    input_root = tmp_path / "467.174-T-0100"
     input_root.mkdir()
     _write_log(input_root / "0100_first.LOG", "first")
     output_root = tmp_path / "output"
@@ -47,7 +47,7 @@ def test_stateful_append_path_appends_only_new_files(tmp_path: Path) -> None:
     summary = run_normalization_pipeline(input_root, output_dir=output_root)
 
     float_summary = summary.processed_floats[0]
-    operational_lines = _jsonl_lines(output_root / "0100" / "log_operational_records.jsonl")
+    operational_lines = _jsonl_lines(output_root / "467.174-T-0100" / "log_operational_records.jsonl")
 
     assert float_summary.log_action == "append"
     assert len(operational_lines) == 2
@@ -56,7 +56,7 @@ def test_stateful_append_path_appends_only_new_files(tmp_path: Path) -> None:
 
 
 def test_stateful_rewrite_and_prune_on_changed_or_removed_source(tmp_path: Path) -> None:
-    input_root = tmp_path / "inputs"
+    input_root = tmp_path / "467.174-T-0100"
     input_root.mkdir()
     log_path = input_root / "0100_first.LOG"
     _write_log(log_path, "first")
@@ -65,7 +65,7 @@ def test_stateful_rewrite_and_prune_on_changed_or_removed_source(tmp_path: Path)
     run_normalization_pipeline(input_root, output_dir=output_root)
     _write_log(log_path, "first changed")
     summary = run_normalization_pipeline(input_root, output_dir=output_root)
-    lines_after_change = _jsonl_lines(output_root / "0100" / "log_operational_records.jsonl")
+    lines_after_change = _jsonl_lines(output_root / "467.174-T-0100" / "log_operational_records.jsonl")
 
     assert summary.processed_floats[0].log_action == "rewrite"
     assert len(lines_after_change) == 1
@@ -73,10 +73,10 @@ def test_stateful_rewrite_and_prune_on_changed_or_removed_source(tmp_path: Path)
 
     log_path.unlink()
     summary = run_normalization_pipeline(input_root, output_dir=output_root)
-    pruned_lines = _jsonl_lines(output_root / "0100" / "state" / "pruned_records.jsonl")
+    pruned_lines = _jsonl_lines(output_root / "467.174-T-0100" / "state" / "pruned_records.jsonl")
 
     assert summary.processed_floats[0].log_action == "rewrite"
-    assert not (output_root / "0100" / "log_operational_records.jsonl").exists()
+    assert not (output_root / "467.174-T-0100" / "log_operational_records.jsonl").exists()
     assert pruned_lines[-1]["source_file"] == log_path.as_posix()
     assert pruned_lines[-1]["source_kind"] == "log"
 

@@ -48,7 +48,7 @@ mermaid-records normalize -i /path/to/input-root -o /path/to/output-dir
 Run the normalization pipeline in stateless file-list mode:
 
 ```sh
-mermaid-records normalize --input-file /path/to/file1.LOG --input-file /path/to/file2.MER -o /path/to/output-dir
+mermaid-records normalize --input-file /path/to/file1.LOG,/path/to/file2.MER /path/to/file3.LOG -o /path/to/output-dir
 ```
 
 Run the normalization pipeline with `BIN` decode enabled:
@@ -60,6 +60,7 @@ MERMAID=/path/to/mermaid mermaid-records normalize -i /path/to/input-root -o /pa
 The `normalize` command writes:
 
 - one subdirectory per float under the output root
+- full serial-number subdirectory names when discoverable, for example `467.174-T-0100/`
 - per-float JSONL outputs such as:
   - `log_operational_records.jsonl`
   - `mer_environment_records.jsonl`
@@ -72,7 +73,8 @@ Stateful mode:
 - uses manifests and incremental rerun detection
 
 Stateless mode:
-- triggered by repeated `--input-file`
+- triggered by `--input-file`
+- accepts comma-separated and/or space-separated file lists
 - ignores manifests
 - does not prune
 - errors if the output tree already contains manifests
