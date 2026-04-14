@@ -13,10 +13,11 @@ from mermaid_records.normalize_pipeline import run_normalization_pipeline
 
 
 def test_stateful_run_writes_per_float_outputs_and_manifests(tmp_path: Path) -> None:
-    input_root = tmp_path / "452.020-P-06"
+    input_root = tmp_path / "inputs"
     input_root.mkdir()
-    _write_log(input_root / "0100_first.LOG", "first")
-    _write_mer(input_root / "0100_first.MER")
+    (input_root / "452.020-P-06.vit").write_text("", encoding="utf-8")
+    _write_log(input_root / "06_first.LOG", "first")
+    _write_mer(input_root / "06_first.MER")
 
     output_root = tmp_path / "output"
     summary = run_normalization_pipeline(input_root, output_dir=output_root)
@@ -27,7 +28,7 @@ def test_stateful_run_writes_per_float_outputs_and_manifests(tmp_path: Path) -> 
     source_state = _read_json(float_dir / latest["source_state_manifest"])
 
     assert summary.mode == "stateful"
-    assert [item.float_id for item in summary.processed_floats] == ["0100"]
+    assert [item.float_id for item in summary.processed_floats] == ["06"]
     assert (float_dir / "log_operational_records.jsonl").exists()
     assert (float_dir / "mer_environment_records.jsonl").exists()
     assert run_json["status"] == "success"
@@ -37,8 +38,9 @@ def test_stateful_run_writes_per_float_outputs_and_manifests(tmp_path: Path) -> 
 
 
 def test_stateful_append_path_appends_only_new_files(tmp_path: Path) -> None:
-    input_root = tmp_path / "467.174-T-0100"
+    input_root = tmp_path / "inputs"
     input_root.mkdir()
+    (input_root / "467.174-T-0100.vit").write_text("", encoding="utf-8")
     _write_log(input_root / "0100_first.LOG", "first")
     output_root = tmp_path / "output"
 
@@ -56,8 +58,9 @@ def test_stateful_append_path_appends_only_new_files(tmp_path: Path) -> None:
 
 
 def test_stateful_rewrite_and_prune_on_changed_or_removed_source(tmp_path: Path) -> None:
-    input_root = tmp_path / "467.174-T-0100"
+    input_root = tmp_path / "inputs"
     input_root.mkdir()
+    (input_root / "467.174-T-0100.vit").write_text("", encoding="utf-8")
     log_path = input_root / "0100_first.LOG"
     _write_log(log_path, "first")
     output_root = tmp_path / "output"

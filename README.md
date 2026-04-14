@@ -60,7 +60,7 @@ MERMAID=/path/to/mermaid mermaid-records normalize -i /path/to/input-root -o /pa
 The `normalize` command writes:
 
 - one subdirectory per float under the output root
-- full serial-number subdirectory names when discoverable, for example `467.174-T-0100/`
+- in stateful corpus mode, full serial-number subdirectory names derived from `<serial>.vit` files in `--input-root`, for example `467.174-T-0100/`
 - per-float JSONL outputs such as:
   - `log_operational_records.jsonl`
   - `mer_environment_records.jsonl`
@@ -71,6 +71,7 @@ The `normalize` command writes:
 Stateful mode:
 - triggered by `--input-root`
 - uses manifests and incremental rerun detection
+- for full-corpus runs, resolves float serials from `<serial>.vit` files in the input root
 
 Stateless mode:
 - triggered by `--input-file`

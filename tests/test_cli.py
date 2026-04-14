@@ -17,8 +17,9 @@ def test_cli_help_exposes_only_normalize_subcommand() -> None:
 
 
 def test_normalize_cli_writes_log_and_mer_jsonl_outputs(tmp_path: Path, capsys) -> None:
-    input_root = tmp_path / "467.174-T-0100"
+    input_root = tmp_path / "inputs"
     input_root.mkdir()
+    (input_root / "467.174-T-0100.vit").write_text("", encoding="utf-8")
 
     log_path = input_root / "0100_sample.LOG"
     log_path.write_text(

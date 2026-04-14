@@ -86,6 +86,7 @@ def _run_stateful(
     output_dir: Path,
     config: Bin2LogConfig | None,
 ) -> NormalizationPipelineSummary:
+    serial_map = _serials_from_vit(input_root)
     grouped_sources = _group_paths(
         [*sorted(iter_bin_files(input_root)), *sorted(iter_log_files(input_root)), *sorted(iter_mer_files(input_root))]
     )
@@ -106,6 +107,7 @@ def _run_stateful(
             paths=current_sources,
             input_root=input_root,
             previous_output_dir=previous_output_dir,
+            serial_map=serial_map,
         )
         float_output_dir = output_dir / float_output_name
         _migrate_output_dir(previous_output_dir, float_output_dir)
@@ -217,6 +219,7 @@ def _run_stateless(
             paths=current_sources,
             input_root=None,
             previous_output_dir=None,
+            serial_map={},
         )
         _execute_log_family(
             float_output_dir=float_output_dir,
@@ -409,7 +412,10 @@ def _float_output_name(
     paths: list[Path],
     input_root: Path | None,
     previous_output_dir: Path | None,
+    serial_map: dict[str, str],
 ) -> str:
+    if float_id in serial_map:
+        return serial_map[float_id]
     if previous_output_dir is not None and _looks_like_full_serial(previous_output_dir.name):
         return previous_output_dir.name
     candidate = _discover_full_serial(paths=paths, input_root=input_root)
@@ -418,6 +424,20 @@ def _float_output_name(
     if previous_output_dir is not None:
         return previous_output_dir.name
     return float_id
+
+
+def _serials_from_vit(input_root: Path) -> dict[str, str]:
+    serial_map: dict[str, str] = {}
+    for path in sorted(input_root.glob("*.vit")) + sorted(input_root.glob("*.VIT")):
+        serial = path.stem
+        if not _looks_like_full_serial(serial):
+            continue
+        serial_map[_short_id_from_serial(serial)] = serial
+    return serial_map
+
+
+def _short_id_from_serial(serial: str) -> str:
+    return serial.rsplit("-", maxsplit=1)[-1]
 
 
 def _discover_full_serial(*, paths: list[Path], input_root: Path | None) -> str | None:
