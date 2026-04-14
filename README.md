@@ -1,14 +1,12 @@
 # mermaid-records
 
-`mermaid-records` is a Python package for the normalization pipeline from raw MERMAID source artifacts to low-level JSONL record families.
+`mermaid-records` is a Python package for the normalization pipeline from raw MERMAID source artifacts to low-level JSONL record families. It is a canonical normalization layer, not an analysis layer.
 
 Current source inputs:
 
 - `BIN`
 - `LOG`
 - `MER`
-
-`CYCLE` and `CYCLE.h` are out of scope for this package. The package keeps decode, parsing, normalization, and later interpretation separate. It is a canonical normalization layer, not an analysis layer.
 
 ## Installation
 
