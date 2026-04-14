@@ -62,6 +62,48 @@ def test_stateful_append_path_appends_only_new_files(tmp_path: Path) -> None:
     assert operational_lines[1]["message"] == "second"
 
 
+def test_stateful_second_run_with_no_raw_source_changes_is_noop(tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    (input_root / "467.174-T-0100.vit").write_text("", encoding="utf-8")
+    _write_log(input_root / "0100_first.LOG", "first")
+    _write_mer(input_root / "0100_first.MER")
+    output_root = tmp_path / "output"
+
+    run_normalization_pipeline(input_root, output_dir=output_root)
+    summary = run_normalization_pipeline(input_root, output_dir=output_root)
+
+    float_summary = summary.processed_floats[0]
+    latest = _read_json(output_root / "467.174-T-0100" / "manifests" / "latest.json")
+    diff_rows = _jsonl_lines(
+        output_root / "467.174-T-0100" / "manifests" / "runs" / latest["run_id"] / "input_file_diffs.jsonl"
+    )
+
+    assert float_summary.log_action == "noop"
+    assert float_summary.mer_action == "noop"
+    assert {row["change_kind"] for row in diff_rows} == {"unchanged"}
+
+
+def test_stateful_append_path_appends_only_new_mer_files(tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    (input_root / "467.174-T-0100.vit").write_text("", encoding="utf-8")
+    _write_mer(input_root / "0100_first.MER")
+    output_root = tmp_path / "output"
+
+    run_normalization_pipeline(input_root, output_dir=output_root)
+    _write_second_mer(input_root / "0100_second.MER")
+    summary = run_normalization_pipeline(input_root, output_dir=output_root)
+
+    float_summary = summary.processed_floats[0]
+    data_lines = _jsonl_lines(output_root / "467.174-T-0100" / "mer_data_records.jsonl")
+
+    assert float_summary.mer_action == "append"
+    assert len(data_lines) == 2
+    assert data_lines[0]["fname"] == "2024-02-07T22_47_22.000000"
+    assert data_lines[1]["fname"] == "2024-02-08T01_02_03.000000"
+
+
 def test_stateful_rewrite_and_prune_on_changed_or_removed_source(tmp_path: Path) -> None:
     input_root = tmp_path / "inputs"
     input_root.mkdir()
@@ -87,6 +129,33 @@ def test_stateful_rewrite_and_prune_on_changed_or_removed_source(tmp_path: Path)
     assert not (output_root / "467.174-T-0100" / "log_operational_records.jsonl").exists()
     assert pruned_lines[-1]["source_file"] == log_path.as_posix()
     assert pruned_lines[-1]["source_kind"] == "log"
+
+
+def test_stateful_rewrite_and_prune_on_changed_or_removed_mer_source(tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    (input_root / "467.174-T-0100.vit").write_text("", encoding="utf-8")
+    mer_path = input_root / "0100_first.MER"
+    _write_mer(mer_path)
+    output_root = tmp_path / "output"
+
+    run_normalization_pipeline(input_root, output_dir=output_root)
+    _write_second_mer(mer_path)
+    summary = run_normalization_pipeline(input_root, output_dir=output_root)
+    data_lines_after_change = _jsonl_lines(output_root / "467.174-T-0100" / "mer_data_records.jsonl")
+
+    assert summary.processed_floats[0].mer_action == "rewrite"
+    assert len(data_lines_after_change) == 1
+    assert data_lines_after_change[0]["fname"] == "2024-02-08T01_02_03.000000"
+
+    mer_path.unlink()
+    summary = run_normalization_pipeline(input_root, output_dir=output_root)
+    pruned_lines = _jsonl_lines(output_root / "467.174-T-0100" / "state" / "pruned_records.jsonl")
+
+    assert summary.processed_floats[0].mer_action == "rewrite"
+    assert not (output_root / "467.174-T-0100" / "mer_data_records.jsonl").exists()
+    assert pruned_lines[-1]["source_file"] == mer_path.as_posix()
+    assert pruned_lines[-1]["source_kind"] == "mer"
 
 
 def test_decoder_state_invalidates_only_bin_dependent_float(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -167,6 +236,24 @@ def test_stateless_mode_isolated_and_rejects_existing_manifests(tmp_path: Path) 
         )
 
 
+def test_stateless_dry_run_is_side_effect_free(tmp_path: Path) -> None:
+    log_path = tmp_path / "0100_first.LOG"
+    _write_log(log_path, "first")
+    output_root = tmp_path / "output"
+
+    summary = run_normalization_pipeline(
+        output_dir=output_root,
+        input_files=[log_path],
+        dry_run=True,
+    )
+    payload = summary.to_dict()
+
+    assert summary.mode == "stateless"
+    assert payload["floats"][0]["families"]["log"]["action"] == "append"
+    assert payload["floats"][0]["counts"]["new"] == 1
+    assert not output_root.exists()
+
+
 def test_dry_run_is_side_effect_free_and_reports_file_diffs(tmp_path: Path) -> None:
     input_root = tmp_path / "inputs"
     input_root.mkdir()
@@ -207,6 +294,29 @@ def test_dry_run_is_side_effect_free_and_reports_file_diffs(tmp_path: Path) -> N
     assert {row["change_kind"] for row in float_payload["families"]["mer"]["file_diffs"]} == {"removed"}
 
 
+def test_first_run_diff_semantics_treat_previous_state_as_empty(tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    (input_root / "467.174-T-0100.vit").write_text("", encoding="utf-8")
+    _write_log(input_root / "0100_first.LOG", "first")
+    output_root = tmp_path / "output"
+
+    run_normalization_pipeline(input_root, output_dir=output_root)
+
+    latest = _read_json(output_root / "467.174-T-0100" / "manifests" / "latest.json")
+    diff_rows = _jsonl_lines(
+        output_root / "467.174-T-0100" / "manifests" / "runs" / latest["run_id"] / "input_file_diffs.jsonl"
+    )
+
+    assert len(diff_rows) == 1
+    assert diff_rows[0]["source_file"] == "0100_first.LOG"
+    assert diff_rows[0]["previous_exists"] is False
+    assert diff_rows[0]["current_exists"] is True
+    assert diff_rows[0]["previous_size_bytes"] == 0
+    assert diff_rows[0]["previous_hash"] is None
+    assert diff_rows[0]["change_kind"] == "new"
+
+
 def _write_log(path: Path, message: str) -> None:
     path.write_text(f"1700000000:[MAIN  ,0007]{message}\n", encoding="utf-8")
 
@@ -226,6 +336,26 @@ def _write_mer(path: Path) -> None:
             "\t<FORMAT ENDIANNESS=LITTLE BYTES_PER_SAMPLE=4 SAMPLING_RATE=20.000000 "
             "STAGES=5 NORMALIZED=YES LENGTH=4832 />\n"
             "\t<DATA>ABC</DATA>\n"
+            "</EVENT>\n"
+        ).encode("ascii")
+    )
+
+
+def _write_second_mer(path: Path) -> None:
+    path.write_bytes(
+        (
+            "<ENVIRONMENT>\n"
+            "\t<BOARD 452116600-A0 />\n"
+            "</ENVIRONMENT>\n"
+            "<PARAMETERS>\n"
+            "\t<MISC UPLOAD_MAX=200kB />\n"
+            "</PARAMETERS>\n"
+            "<EVENT>\n"
+            "\t<INFO DATE=2024-02-08T01:02:03 FNAME=2024-02-08T01_02_03.000000 "
+            "SMP_OFFSET=614055 TRUE_FS=40.014107 />\n"
+            "\t<FORMAT ENDIANNESS=LITTLE BYTES_PER_SAMPLE=4 SAMPLING_RATE=20.000000 "
+            "STAGES=5 NORMALIZED=YES LENGTH=2048 />\n"
+            "\t<DATA>DEFG</DATA>\n"
             "</EVENT>\n"
         ).encode("ascii")
     )
