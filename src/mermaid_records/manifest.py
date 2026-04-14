@@ -1,10 +1,9 @@
 # SPDX-License-Identifier: MIT
 
-"""Manifest persistence for normalization pipeline runs."""
+"""Per-float manifest persistence for normalization pipeline runs."""
 
 from __future__ import annotations
 
-from dataclasses import asdict
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -16,76 +15,68 @@ from uuid import uuid4
 
 if TYPE_CHECKING:
     from .bin2log import Bin2LogConfig
-    from .normalize_pipeline import NormalizationPipelineSummary
 
 
-RUN_STATUS = ("success", "partial", "failed")
-
-
-def begin_run(
+def begin_float_run(
     *,
+    float_output_dir: Path,
     input_root: Path,
-    output_root: Path,
-    config: Bin2LogConfig | None,
     raw_source_paths: list[Path],
+    config: Bin2LogConfig | None,
+    normalization_version: str,
 ) -> dict[str, object]:
-    """Create the initial run context for manifest persistence."""
+    """Create manifest context for one float-level stateful run."""
 
     started_at = _iso_now()
     run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
-    manifests_root = output_root / "manifests"
+    manifests_root = float_output_dir / "manifests"
     run_dir = manifests_root / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
-
+    source_state = build_source_state(
+        raw_source_paths=raw_source_paths,
+        config=config if _has_bin(raw_source_paths) else None,
+        input_root=input_root,
+        normalization_version=normalization_version,
+    )
     return {
         "run_id": run_id,
         "started_at": started_at,
-        "input_root": input_root,
-        "output_root": output_root,
-        "manifests_root": manifests_root,
         "run_dir": run_dir,
-        "source_state": build_source_state(raw_source_paths=raw_source_paths, config=config),
+        "manifests_root": manifests_root,
+        "float_output_dir": float_output_dir,
+        "source_state": source_state,
     }
 
 
-def finalize_run(
+def finalize_float_run(
     *,
     context: dict[str, object],
-    normalization_version: str,
     preflight_mode: str | None,
-    summary: NormalizationPipelineSummary | None,
     error: BaseException | None,
 ) -> None:
-    """Write the manifest set for a completed or failed normalization run."""
+    """Write per-float manifests for a completed or failed run."""
 
-    run_id = context["run_id"]
-    started_at = context["started_at"]
-    input_root = Path(context["input_root"])
-    output_root = Path(context["output_root"])
-    manifests_root = Path(context["manifests_root"])
     run_dir = Path(context["run_dir"])
+    manifests_root = Path(context["manifests_root"])
+    float_output_dir = Path(context["float_output_dir"])
     source_state = context["source_state"]
-
-    completed_at = _iso_now()
-    status = _run_status(output_root, error)
-
     run_json = {
-        "run_id": run_id,
-        "started_at": started_at,
-        "completed_at": completed_at,
-        "input_root": input_root.as_posix(),
-        "output_root": output_root.as_posix(),
-        "normalization_version": normalization_version,
+        "run_id": context["run_id"],
+        "started_at": context["started_at"],
+        "completed_at": _iso_now(),
+        "input_root": source_state["input_root"],
+        "output_root": float_output_dir.as_posix(),
+        "normalization_version": source_state["normalization_version"],
         "preflight_mode": preflight_mode,
-        "status": status,
+        "status": _run_status(float_output_dir, error),
     }
-    outputs_json = _build_outputs_json(output_root=output_root, summary=summary)
+    outputs_json = build_outputs_manifest(float_output_dir)
 
     _write_json(run_dir / "run.json", run_json)
     _write_json(run_dir / "outputs.json", outputs_json)
     _write_json(run_dir / "source_state.json", source_state)
 
-    preflight_root = output_root / "preflight_status.json"
+    preflight_root = float_output_dir / "preflight_status.json"
     if preflight_root.exists():
         (run_dir / "preflight_status.json").write_text(
             preflight_root.read_text(encoding="utf-8"),
@@ -93,15 +84,17 @@ def finalize_run(
         )
 
     latest_json = {
-        "run_id": run_id,
-        "status": status,
-        "started_at": started_at,
-        "completed_at": completed_at,
-        "run_manifest": (run_dir / "run.json").relative_to(output_root).as_posix(),
-        "outputs_manifest": (run_dir / "outputs.json").relative_to(output_root).as_posix(),
-        "source_state_manifest": (run_dir / "source_state.json").relative_to(output_root).as_posix(),
+        "run_id": context["run_id"],
+        "status": run_json["status"],
+        "started_at": context["started_at"],
+        "completed_at": run_json["completed_at"],
+        "run_manifest": (run_dir / "run.json").relative_to(float_output_dir).as_posix(),
+        "outputs_manifest": (run_dir / "outputs.json").relative_to(float_output_dir).as_posix(),
+        "source_state_manifest": (
+            (run_dir / "source_state.json").relative_to(float_output_dir).as_posix()
+        ),
         "preflight_status": (
-            (run_dir / "preflight_status.json").relative_to(output_root).as_posix()
+            (run_dir / "preflight_status.json").relative_to(float_output_dir).as_posix()
             if (run_dir / "preflight_status.json").exists()
             else None
         ),
@@ -110,12 +103,35 @@ def finalize_run(
     _write_json(manifests_root / "latest.json", latest_json)
 
 
+def latest_source_state(float_output_dir: Path) -> dict[str, object] | None:
+    """Load the latest persisted source state for one float, if present."""
+
+    latest_path = float_output_dir / "manifests" / "latest.json"
+    if not latest_path.exists():
+        return None
+    latest = json.loads(latest_path.read_text(encoding="utf-8"))
+    source_state_path = float_output_dir / latest["source_state_manifest"]
+    if not source_state_path.exists():
+        return None
+    return json.loads(source_state_path.read_text(encoding="utf-8"))
+
+
+def output_dir_contains_manifests(output_dir: Path) -> bool:
+    """Return whether the output tree already contains manifests."""
+
+    if not output_dir.exists():
+        return False
+    return any(path.is_dir() and path.name == "manifests" for path in output_dir.rglob("manifests"))
+
+
 def build_source_state(
     *,
     raw_source_paths: list[Path],
     config: Bin2LogConfig | None,
+    input_root: Path,
+    normalization_version: str,
 ) -> dict[str, object]:
-    """Build persisted source state for raw inputs and decoder state."""
+    """Build source state for one float-level run."""
 
     raw_sources = [
         {
@@ -127,31 +143,76 @@ def build_source_state(
         for path in sorted(raw_source_paths)
     ]
     return {
+        "input_root": input_root.as_posix(),
+        "normalization_version": normalization_version,
         "raw_sources": raw_sources,
         "decoder_state": _decoder_state(config),
     }
+
+
+def build_outputs_manifest(float_output_dir: Path) -> dict[str, object]:
+    """Build the output inventory for one float-level output root."""
+
+    jsonl_outputs = [
+        {
+            "path": path.relative_to(float_output_dir).as_posix(),
+            "size_bytes": path.stat().st_size,
+        }
+        for path in sorted(float_output_dir.glob("*.jsonl"))
+        if path.is_file()
+    ]
+    counts = {}
+    for item in jsonl_outputs:
+        path = float_output_dir / item["path"]
+        with path.open("r", encoding="utf-8") as handle:
+            counts[path.name.removesuffix(".jsonl")] = sum(1 for line in handle if line.strip())
+    return {
+        "jsonl_outputs": jsonl_outputs,
+        "counts": counts,
+    }
+
+
+def record_pruned_sources(
+    *,
+    float_output_dir: Path,
+    float_id: str,
+    removed_sources: list[dict[str, object]],
+) -> None:
+    """Append pruned-source records for removed raw files."""
+
+    if not removed_sources:
+        return
+    state_dir = float_output_dir / "state"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    pruned_path = state_dir / "pruned_records.jsonl"
+    removed_at = _iso_now()
+    with pruned_path.open("a", encoding="utf-8") as handle:
+        for source in removed_sources:
+            record = {
+                "source_file": source["source_file"],
+                "source_kind": source["source_kind"],
+                "float_id": float_id,
+                "removed_at": removed_at,
+            }
+            handle.write(json.dumps(record, sort_keys=True))
+            handle.write("\n")
 
 
 def _decoder_state(config: Bin2LogConfig | None) -> dict[str, object] | None:
     if config is None:
         return None
 
-    decoder_python_version = _python_version(config.python_executable)
-    decoder_script_hash = _hash_file(config.decoder_script)
-    decoder_git_commit = _git_commit(config.decoder_script.parent)
     database_root = _database_root()
     database_files = _database_files(database_root)
-    database_bundle_hash = _bundle_hash(database_files)
-
     return {
         "decoder_python": str(config.python_executable),
-        "decoder_python_version": decoder_python_version,
+        "decoder_python_version": _python_version(config.python_executable),
         "decoder_script": str(config.decoder_script),
-        "decoder_script_hash": decoder_script_hash,
+        "decoder_script_hash": _hash_file(config.decoder_script),
         "preflight_mode": config.preflight_mode,
-        "database_bundle_hash": database_bundle_hash,
+        "database_bundle_hash": _bundle_hash(database_files),
         "database_files": [path.as_posix() for path in database_files],
-        "decoder_git_commit": decoder_git_commit,
+        "decoder_git_commit": _git_commit(config.decoder_script.parent),
     }
 
 
@@ -174,20 +235,13 @@ def _database_files(database_root: Path | None) -> list[Path]:
 def _bundle_hash(paths: list[Path]) -> str | None:
     if not paths:
         return None
-    manifest_lines = [
-        f"{path.name}\t{_hash_file(path)}"
-        for path in paths
-    ]
+    manifest_lines = [f"{path.name}\t{_hash_file(path)}" for path in paths]
     return hashlib.sha256("\n".join(manifest_lines).encode("utf-8")).hexdigest()
 
 
 def _python_version(python_executable: Path) -> str | None:
     result = subprocess.run(
-        [
-            str(python_executable),
-            "-c",
-            "import platform; print(platform.python_version())",
-        ],
+        [str(python_executable), "-c", "import platform; print(platform.python_version())"],
         capture_output=True,
         text=True,
         check=False,
@@ -209,40 +263,10 @@ def _git_commit(cwd: Path) -> str | None:
     return result.stdout.strip() or None
 
 
-def _build_outputs_json(
-    *,
-    output_root: Path,
-    summary: NormalizationPipelineSummary | None,
-) -> dict[str, object]:
-    jsonl_outputs = [
-        {
-            "path": path.relative_to(output_root).as_posix(),
-            "size_bytes": path.stat().st_size,
-        }
-        for path in sorted(output_root.rglob("*.jsonl"))
-        if path.is_file()
-    ]
-    payload: dict[str, object] = {"jsonl_outputs": jsonl_outputs}
-    if summary is not None:
-        payload["counts"] = {
-            "log_operational_records": summary.log_summary.operational_records,
-            "log_acquisition_records": summary.log_summary.acquisition_records,
-            "log_ascent_request_records": summary.log_summary.ascent_request_records,
-            "log_gps_records": summary.log_summary.gps_records,
-            "log_transmission_records": summary.log_summary.transmission_records,
-            "log_measurement_records": summary.log_summary.measurement_records,
-            "log_unclassified_records": summary.log_summary.unclassified_records,
-            "mer_environment_records": summary.mer_summary.environment_records,
-            "mer_parameter_records": summary.mer_summary.parameter_records,
-            "mer_data_records": summary.mer_summary.data_records,
-        }
-    return payload
-
-
-def _run_status(output_root: Path, error: BaseException | None) -> str:
+def _run_status(float_output_dir: Path, error: BaseException | None) -> str:
     if error is None:
         return "success"
-    if any(output_root.rglob("*.jsonl")) or (output_root / "preflight_status.json").exists():
+    if any(float_output_dir.glob("*.jsonl")) or (float_output_dir / "preflight_status.json").exists():
         return "partial"
     return "failed"
 
@@ -256,6 +280,10 @@ def _source_kind(path: Path) -> str:
     if suffix == ".MER":
         return "mer"
     raise ValueError(f"Unsupported raw source kind for manifest: {path}")
+
+
+def _has_bin(paths: list[Path]) -> bool:
+    return any(path.suffix.upper() == ".BIN" for path in paths)
 
 
 def _hash_file(path: Path) -> str:

@@ -45,6 +45,12 @@ Run the normalization pipeline from raw inputs to JSONL outputs:
 mermaid-records normalize -i /path/to/input-root -o /path/to/output-dir
 ```
 
+Run the normalization pipeline in stateless file-list mode:
+
+```sh
+mermaid-records normalize --input-file /path/to/file1.LOG --input-file /path/to/file2.MER -o /path/to/output-dir
+```
+
 Run the normalization pipeline with `BIN` decode enabled:
 
 ```sh
@@ -53,10 +59,23 @@ MERMAID=/path/to/mermaid mermaid-records normalize -i /path/to/input-root -o /pa
 
 The `normalize` command writes:
 
-- `log_jsonl/`
-- `mer_jsonl/`
-- `manifests/`
-- `preflight_status.json` when BIN decode preflight runs
+- one subdirectory per float under the output root
+- per-float JSONL outputs such as:
+  - `log_operational_records.jsonl`
+  - `mer_environment_records.jsonl`
+- per-float `manifests/` in stateful mode
+- per-float `state/` for pruning records in stateful mode
+- per-float `preflight_status.json` when BIN decode preflight runs
+
+Stateful mode:
+- triggered by `--input-root`
+- uses manifests and incremental rerun detection
+
+Stateless mode:
+- triggered by repeated `--input-file`
+- ignores manifests
+- does not prune
+- errors if the output tree already contains manifests
 
 ## Decoder Requirements
 

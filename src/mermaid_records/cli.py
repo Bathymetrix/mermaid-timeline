@@ -29,12 +29,19 @@ def build_parser() -> argparse.ArgumentParser:
         "normalize",
         help="Run the normalization pipeline from raw inputs to JSONL outputs.",
     )
-    normalize.add_argument(
+    input_group = normalize.add_mutually_exclusive_group(required=True)
+    input_group.add_argument(
         "-i",
         "--input-root",
         type=Path,
-        required=True,
         help="Root directory containing BIN, LOG, and/or MER inputs.",
+    )
+    input_group.add_argument(
+        "--input-file",
+        type=Path,
+        action="append",
+        default=None,
+        help="Explicit raw source file to normalize in stateless mode. Repeat for multiple files.",
     )
     normalize.add_argument(
         "-o",
@@ -92,6 +99,7 @@ def _handle_normalize(args: argparse.Namespace) -> int:
         args.input_root,
         output_dir=args.output_dir,
         config=config,
+        input_files=args.input_file,
     )
     print(json.dumps(summary.to_dict(), sort_keys=True))
     return 0

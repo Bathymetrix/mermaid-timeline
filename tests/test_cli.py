@@ -20,7 +20,7 @@ def test_normalize_cli_writes_log_and_mer_jsonl_outputs(tmp_path: Path, capsys) 
     input_root = tmp_path / "inputs"
     input_root.mkdir()
 
-    log_path = input_root / "sample.LOG"
+    log_path = input_root / "0100_sample.LOG"
     log_path.write_text(
         "1700000000:[MAIN  ,0007]buoy 467.174-T-0100\n",
         encoding="utf-8",
@@ -63,10 +63,8 @@ def test_normalize_cli_writes_log_and_mer_jsonl_outputs(tmp_path: Path, capsys) 
     assert result == 0
     assert payload["input_root"] == input_root.as_posix()
     assert payload["output_dir"] == output_dir.as_posix()
-    assert payload["bin_count"] == 0
-    assert payload["log_count"] == 1
-    assert payload["mer_count"] == 1
-    assert payload["decoded_log_count"] == 0
-    assert (output_dir / "log_jsonl" / "log_operational_records.jsonl").exists()
-    assert (output_dir / "mer_jsonl" / "mer_environment_records.jsonl").exists()
-    assert not (output_dir / "preflight_status.json").exists()
+    assert payload["mode"] == "stateful"
+    assert payload["processed_floats"][0]["float_id"] == "0100"
+    assert (output_dir / "0100" / "log_operational_records.jsonl").exists()
+    assert (output_dir / "0100" / "mer_environment_records.jsonl").exists()
+    assert not (output_dir / "0100" / "preflight_status.json").exists()

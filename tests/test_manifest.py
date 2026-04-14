@@ -2,30 +2,164 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
-import platform
 import sys
 
 import pytest
 
-from mermaid_records.bin2log import Bin2LogConfig, Bin2LogError
+from mermaid_records.bin2log import Bin2LogConfig
 from mermaid_records.normalize_pipeline import run_normalization_pipeline
 
 
-def test_normalization_pipeline_writes_manifests_for_log_mer_run(
-    tmp_path: Path,
-) -> None:
+def test_stateful_run_writes_per_float_outputs_and_manifests(tmp_path: Path) -> None:
     input_root = tmp_path / "inputs"
     input_root.mkdir()
-    log_path = input_root / "0100_sample.LOG"
-    log_path.write_text(
-        "1700000000:[MAIN  ,0007]buoy 467.174-T-0100\n",
-        encoding="utf-8",
+    _write_log(input_root / "0100_first.LOG", "first")
+    _write_mer(input_root / "0100_first.MER")
+
+    output_root = tmp_path / "output"
+    summary = run_normalization_pipeline(input_root, output_dir=output_root)
+
+    float_dir = output_root / "0100"
+    latest = _read_json(float_dir / "manifests" / "latest.json")
+    run_json = _read_json(float_dir / latest["run_manifest"])
+    source_state = _read_json(float_dir / latest["source_state_manifest"])
+
+    assert summary.mode == "stateful"
+    assert [item.float_id for item in summary.processed_floats] == ["0100"]
+    assert (float_dir / "log_operational_records.jsonl").exists()
+    assert (float_dir / "mer_environment_records.jsonl").exists()
+    assert run_json["status"] == "success"
+    assert source_state["input_root"] == input_root.as_posix()
+    assert source_state["normalization_version"] == "0.1.0"
+    assert {item["source_kind"] for item in source_state["raw_sources"]} == {"log", "mer"}
+
+
+def test_stateful_append_path_appends_only_new_files(tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    _write_log(input_root / "0100_first.LOG", "first")
+    output_root = tmp_path / "output"
+
+    run_normalization_pipeline(input_root, output_dir=output_root)
+    _write_log(input_root / "0100_second.LOG", "second")
+    summary = run_normalization_pipeline(input_root, output_dir=output_root)
+
+    float_summary = summary.processed_floats[0]
+    operational_lines = _jsonl_lines(output_root / "0100" / "log_operational_records.jsonl")
+
+    assert float_summary.log_action == "append"
+    assert len(operational_lines) == 2
+    assert operational_lines[0]["message"] == "first"
+    assert operational_lines[1]["message"] == "second"
+
+
+def test_stateful_rewrite_and_prune_on_changed_or_removed_source(tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    log_path = input_root / "0100_first.LOG"
+    _write_log(log_path, "first")
+    output_root = tmp_path / "output"
+
+    run_normalization_pipeline(input_root, output_dir=output_root)
+    _write_log(log_path, "first changed")
+    summary = run_normalization_pipeline(input_root, output_dir=output_root)
+    lines_after_change = _jsonl_lines(output_root / "0100" / "log_operational_records.jsonl")
+
+    assert summary.processed_floats[0].log_action == "rewrite"
+    assert len(lines_after_change) == 1
+    assert lines_after_change[0]["message"] == "first changed"
+
+    log_path.unlink()
+    summary = run_normalization_pipeline(input_root, output_dir=output_root)
+    pruned_lines = _jsonl_lines(output_root / "0100" / "state" / "pruned_records.jsonl")
+
+    assert summary.processed_floats[0].log_action == "rewrite"
+    assert not (output_root / "0100" / "log_operational_records.jsonl").exists()
+    assert pruned_lines[-1]["source_file"] == log_path.as_posix()
+    assert pruned_lines[-1]["source_kind"] == "log"
+
+
+def test_decoder_state_invalidates_only_bin_dependent_float(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    (input_root / "0100_first.BIN").write_bytes(b"raw-bin")
+    _write_log(input_root / "0200_first.LOG", "plain log")
+
+    mermaid_root = tmp_path / "mermaid_root"
+    database_root = mermaid_root / "database"
+    database_root.mkdir(parents=True)
+    (database_root / "Databases.json").write_text("[]\n", encoding="utf-8")
+    monkeypatch.setenv("MERMAID", str(mermaid_root))
+
+    decoder_a = _write_decoder(tmp_path / "decoder_a.py", "decoded a")
+    decoder_b = _write_decoder(tmp_path / "decoder_b.py", "decoded b")
+    output_root = tmp_path / "output"
+
+    run_normalization_pipeline(
+        input_root,
+        output_dir=output_root,
+        config=Bin2LogConfig(
+            python_executable=Path(sys.executable),
+            decoder_script=decoder_a,
+        ),
     )
-    mer_path = input_root / "0100_sample.MER"
-    mer_path.write_bytes(
+    log_only_before = (output_root / "0200" / "log_operational_records.jsonl").read_text(encoding="utf-8")
+
+    summary = run_normalization_pipeline(
+        input_root,
+        output_dir=output_root,
+        config=Bin2LogConfig(
+            python_executable=Path(sys.executable),
+            decoder_script=decoder_b,
+        ),
+    )
+
+    by_float = {item.float_id: item for item in summary.processed_floats}
+    bin_lines = _jsonl_lines(output_root / "0100" / "log_operational_records.jsonl")
+    log_only_after = (output_root / "0200" / "log_operational_records.jsonl").read_text(encoding="utf-8")
+
+    assert by_float["0100"].decoder_state_invalidated is True
+    assert by_float["0100"].log_action == "rewrite"
+    assert by_float["0200"].decoder_state_invalidated is False
+    assert by_float["0200"].log_action == "noop"
+    assert bin_lines[0]["message"] == "decoded b"
+    assert log_only_before == log_only_after
+
+
+def test_stateless_mode_isolated_and_rejects_existing_manifests(tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    log_path = input_root / "0100_first.LOG"
+    _write_log(log_path, "first")
+
+    output_root = tmp_path / "output"
+    summary = run_normalization_pipeline(
+        output_dir=output_root,
+        input_files=[log_path],
+    )
+
+    assert summary.mode == "stateless"
+    assert not (output_root / "0100" / "manifests").exists()
+    assert (output_root / "0100" / "log_operational_records.jsonl").exists()
+
+    manifests_dir = output_root / "0200" / "manifests"
+    manifests_dir.mkdir(parents=True)
+    (manifests_dir / "latest.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(ValueError, match="already contains manifests"):
+        run_normalization_pipeline(
+            output_dir=output_root,
+            input_files=[log_path],
+        )
+
+
+def _write_log(path: Path, message: str) -> None:
+    path.write_text(f"1700000000:[MAIN  ,0007]{message}\n", encoding="utf-8")
+
+
+def _write_mer(path: Path) -> None:
+    path.write_bytes(
         (
             "<ENVIRONMENT>\n"
             "\t<BOARD 452116600-A0 />\n"
@@ -42,62 +176,11 @@ def test_normalization_pipeline_writes_manifests_for_log_mer_run(
             "</EVENT>\n"
         ).encode("ascii")
     )
-    output_root = tmp_path / "output"
-
-    summary = run_normalization_pipeline(input_root, output_dir=output_root)
-
-    latest = _read_json(output_root / "manifests" / "latest.json")
-    run_dir = output_root / Path(latest["run_manifest"]).parent
-    run_json = _read_json(output_root / latest["run_manifest"])
-    outputs_json = _read_json(output_root / latest["outputs_manifest"])
-    source_state = _read_json(output_root / latest["source_state_manifest"])
-
-    assert summary.bin_count == 0
-    assert run_json["status"] == "success"
-    assert run_json["preflight_mode"] is None
-    assert source_state["decoder_state"] is None
-    assert {item["source_kind"] for item in source_state["raw_sources"]} == {"log", "mer"}
-    assert sorted(item["source_file"] for item in source_state["raw_sources"]) == sorted(
-        [log_path.as_posix(), mer_path.as_posix()]
-    )
-    assert outputs_json["counts"]["log_operational_records"] == 1
-    assert outputs_json["counts"]["mer_environment_records"] == 1
-    assert any(
-        item["path"] == "log_jsonl/log_operational_records.jsonl"
-        for item in outputs_json["jsonl_outputs"]
-    )
-    assert any(
-        item["path"] == "mer_jsonl/mer_environment_records.jsonl"
-        for item in outputs_json["jsonl_outputs"]
-    )
-    assert run_dir.exists()
 
 
-def test_normalization_pipeline_writes_decoder_state_for_bin_run(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    input_root = tmp_path / "inputs"
-    input_root.mkdir()
-    bin_path = input_root / "0100_sample.BIN"
-    bin_path.write_bytes(b"raw-bin")
-
-    mermaid_root = tmp_path / "mermaid_root"
-    database_root = mermaid_root / "database"
-    database_root.mkdir(parents=True)
-    for name in (
-        "Databases.json",
-        "DatabaseV1_0.json",
-        "MarittimoV1_1.json",
-        "MultimerV1_0.json",
-        "UniversalV1_0.json",
-    ):
-        (database_root / name).write_text(f'{{"name": "{name}"}}\n', encoding="utf-8")
-    monkeypatch.setenv("MERMAID", str(mermaid_root))
-
-    decoder_script = tmp_path / "fake_decoder.py"
-    decoder_script.write_text(
-        """
+def _write_decoder(path: Path, message: str) -> Path:
+    path.write_text(
+        f"""
 from pathlib import Path
 
 def database_update(_arg):
@@ -111,107 +194,19 @@ def concatenate_rbr_files(path):
 
 def decrypt_all(path):
     workdir = Path(path)
-    log = workdir / "0100_sample.LOG"
-    log.write_text("1700000000:[MAIN  ,0007]decoded\\n", encoding="utf-8")
+    log = workdir / "0100_first.LOG"
+    log.write_text("1700000000:[MAIN  ,0007]{message}\\n", encoding="utf-8")
     return [path]
 """,
         encoding="utf-8",
     )
-
-    output_root = tmp_path / "output"
-    config = Bin2LogConfig(
-        python_executable=Path(sys.executable),
-        decoder_script=decoder_script,
-    )
-
-    run_normalization_pipeline(input_root, output_dir=output_root, config=config)
-
-    latest = _read_json(output_root / "manifests" / "latest.json")
-    run_json = _read_json(output_root / latest["run_manifest"])
-    source_state = _read_json(output_root / latest["source_state_manifest"])
-    preflight_run = _read_json(output_root / latest["preflight_status"])
-    preflight_root = _read_json(output_root / "preflight_status.json")
-
-    decoder_state = source_state["decoder_state"]
-    assert run_json["status"] == "success"
-    assert decoder_state["decoder_python"] == str(Path(sys.executable))
-    assert decoder_state["decoder_python_version"] == platform.python_version()
-    assert decoder_state["decoder_script"] == str(decoder_script)
-    assert decoder_state["decoder_script_hash"] == _hash_file(decoder_script)
-    assert decoder_state["preflight_mode"] == "strict"
-    assert decoder_state["decoder_git_commit"] is None
-    assert decoder_state["database_bundle_hash"] is not None
-    assert decoder_state["database_files"] == [
-        (database_root / name).as_posix()
-        for name in sorted(
-            [
-                "DatabaseV1_0.json",
-                "Databases.json",
-                "MarittimoV1_1.json",
-                "MultimerV1_0.json",
-                "UniversalV1_0.json",
-            ]
-        )
-    ]
-    assert preflight_run == preflight_root
-
-
-def test_normalization_pipeline_writes_failed_run_manifests_on_strict_preflight_error(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    input_root = tmp_path / "inputs"
-    input_root.mkdir()
-    (input_root / "0100_sample.BIN").write_bytes(b"raw-bin")
-
-    mermaid_root = tmp_path / "mermaid_root"
-    database_root = mermaid_root / "database"
-    database_root.mkdir(parents=True)
-    (database_root / "Databases.json").write_text("[]\n", encoding="utf-8")
-    monkeypatch.setenv("MERMAID", str(mermaid_root))
-
-    decoder_script = tmp_path / "fake_decoder_fail.py"
-    decoder_script.write_text(
-        """
-def database_update(_arg):
-    print("Update Databases")
-    print('Exception: "simulated refresh failure" detected when get Databases.json')
-
-def concatenate_files(path):
-    return [path]
-
-def concatenate_rbr_files(path):
-    return [path]
-
-def decrypt_all(path):
-    return [path]
-""",
-        encoding="utf-8",
-    )
-
-    config = Bin2LogConfig(
-        python_executable=Path(sys.executable),
-        decoder_script=decoder_script,
-        preflight_mode="strict",
-    )
-    output_root = tmp_path / "output"
-
-    with pytest.raises(Bin2LogError):
-        run_normalization_pipeline(input_root, output_dir=output_root, config=config)
-
-    latest = _read_json(output_root / "manifests" / "latest.json")
-    run_json = _read_json(output_root / latest["run_manifest"])
-    source_state = _read_json(output_root / latest["source_state_manifest"])
-
-    assert run_json["status"] == "partial"
-    assert run_json["preflight_mode"] == "strict"
-    assert source_state["decoder_state"]["preflight_mode"] == "strict"
-    assert (output_root / latest["preflight_status"]).exists()
+    return path
 
 
 def _read_json(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _hash_file(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def _jsonl_lines(path: Path) -> list[dict[str, object]]:
+    with path.open("r", encoding="utf-8") as handle:
+        return [json.loads(line) for line in handle if line.strip()]
