@@ -144,6 +144,34 @@ def test_write_mer_jsonl_prototypes_preserves_environment_parameter_and_data_row
     assert data_records[1]["data_payload_nbytes"] == 4
     assert "record_time" not in data_records[1]
     assert "time" not in data_records[1]
+    assert all(record["float_id"] == "0100" for record in data_records)
+
+
+def test_write_mer_jsonl_prototypes_accepts_canonical_float_id_override(tmp_path: Path) -> None:
+    mer_path = tmp_path / "0100_sample.MER"
+    mer_path.write_bytes(
+        (
+            "<ENVIRONMENT>\n"
+            "\t<BOARD 452116600-A0 />\n"
+            "</ENVIRONMENT>\n"
+            "<PARAMETERS>\n"
+            "\t<MISC UPLOAD_MAX=100kB />\n"
+            "</PARAMETERS>\n"
+            "<EVENT>\n"
+            "\t<INFO DATE=2024-02-07T22:47:22 FNAME=2024-02-07T22_47_22.000000 "
+            "SMP_OFFSET=614054 TRUE_FS=40.014107 />\n"
+            "\t<FORMAT ENDIANNESS=LITTLE BYTES_PER_SAMPLE=4 SAMPLING_RATE=20.000000 "
+            "STAGES=5 NORMALIZED=YES LENGTH=4832 />\n"
+            "\t<DATA>ABC</DATA>\n"
+            "</EVENT>\n"
+        ).encode("ascii")
+    )
+
+    output_dir = tmp_path / "jsonl"
+    write_mer_jsonl_prototypes([mer_path], output_dir, float_id="T0100")
+    data_records = _read_jsonl(output_dir / "mer_data_records.jsonl")
+
+    assert data_records[0]["float_id"] == "T0100"
 
 
 def test_write_mer_jsonl_prototypes_counts_zero_event_files(tmp_path: Path) -> None:

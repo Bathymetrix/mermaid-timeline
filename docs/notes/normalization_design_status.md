@@ -23,6 +23,11 @@ Execution modes:
 
 In stateful corpus mode, per-float output directories are organized under the output root and should use the full float serial from `<serial>.vit` files in the input root when available.
 
+Canonical float identity should come from the parsed serial when available. For example:
+
+- `452.020-P-08` -> `float_id = P0008`
+- `467.174-T-0100` -> `float_id = T0100`
+
 ## Manifest Structure
 
 Per float:

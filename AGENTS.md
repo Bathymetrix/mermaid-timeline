@@ -216,3 +216,4 @@ Avoid:
 - Do not mutate existing JSONL outputs in place; append and full rewrite are the only safe modification paths.
 - Future dry-run/report behavior must be completely side-effect free, including no file writes of any kind.
 - Persisted `manifests/runs/<run_id>/input_file_diffs.jsonl` is a strict raw input diff log: file-level fields only, no append/rewrite/noop semantics, and no standalone non-file invalidation records.
+- Canonical `float_id` should be parsed from the Osean serial naming rules when a full serial is available, for example `452.020-P-08 -> P0008` and `467.174-T-0100 -> T0100`. Do not derive canonical `float_id` independently in multiple modules.

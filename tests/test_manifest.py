@@ -29,7 +29,7 @@ def test_stateful_run_writes_per_float_outputs_and_manifests(tmp_path: Path) -> 
     diff_rows = _jsonl_lines(float_dir / "manifests" / "runs" / latest["run_id"] / "input_file_diffs.jsonl")
 
     assert summary.mode == "stateful"
-    assert [item.float_id for item in summary.processed_floats] == ["06"]
+    assert [item.float_id for item in summary.processed_floats] == ["P0006"]
     assert (float_dir / "log_operational_records.jsonl").exists()
     assert (float_dir / "mer_environment_records.jsonl").exists()
     assert run_json["status"] == "success"
@@ -39,6 +39,7 @@ def test_stateful_run_writes_per_float_outputs_and_manifests(tmp_path: Path) -> 
     assert {item["change_kind"] for item in diff_rows} == {"new"}
     assert all(item["run_id"] == latest["run_id"] for item in diff_rows)
     assert {item["source_file"] for item in diff_rows} == {"06_first.LOG", "06_first.MER"}
+    assert {item["float_id"] for item in diff_rows} == {"P0006"}
 
 
 def test_stateful_append_path_appends_only_new_files(tmp_path: Path) -> None:

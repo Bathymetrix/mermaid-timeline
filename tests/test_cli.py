@@ -64,7 +64,7 @@ def test_normalize_cli_writes_log_and_mer_jsonl_outputs(tmp_path: Path, capsys) 
     assert payload["input_root"] == input_root.as_posix()
     assert payload["output_dir"] == output_dir.as_posix()
     assert payload["mode"] == "stateful"
-    assert payload["processed_floats"][0]["float_id"] == "0100"
+    assert payload["processed_floats"][0]["float_id"] == "T0100"
     assert (output_dir / "467.174-T-0100" / "log_operational_records.jsonl").exists()
     assert (output_dir / "467.174-T-0100" / "mer_environment_records.jsonl").exists()
     assert not (output_dir / "467.174-T-0100" / "preflight_status.json").exists()

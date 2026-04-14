@@ -25,6 +25,7 @@ from .normalize_log import OUTPUT_FILENAMES as LOG_OUTPUT_FILENAMES
 from .normalize_log import write_log_jsonl_prototypes
 from .normalize_mer import OUTPUT_FILENAMES as MER_OUTPUT_FILENAMES
 from .normalize_mer import write_mer_jsonl_prototypes
+from .parse_float_name import FloatName, float_name_from_vit_path, maybe_parse_float_name
 
 
 type ExecutionMode = str
@@ -124,29 +125,35 @@ def _run_stateful(
     config: Bin2LogConfig | None,
     dry_run: bool,
 ) -> NormalizationPipelineSummary | DryRunSummary:
-    serial_map = _serials_from_vit(input_root)
+    serial_map = _float_names_from_vit(input_root)
     grouped_sources = _group_paths(
         [*sorted(iter_bin_files(input_root)), *sorted(iter_log_files(input_root)), *sorted(iter_mer_files(input_root))]
     )
     if not dry_run:
         output_dir.mkdir(parents=True, exist_ok=True)
     previous_outputs = _previous_outputs_by_float_id(output_dir) if output_dir.exists() else {}
-    all_float_ids = sorted(set(grouped_sources) | set(previous_outputs))
+    all_group_keys = sorted(set(grouped_sources) | set(previous_outputs))
     normalization_version = _normalization_version()
     planned_floats: list[PlannedFloatRun] = []
 
-    for float_id in all_float_ids:
-        current_sources = grouped_sources.get(float_id, [])
+    for group_key in all_group_keys:
+        current_sources = grouped_sources.get(group_key, [])
         if any(path.suffix.upper() == ".BIN" for path in current_sources) and config is None:
             raise ValueError("decoder config is required when BIN inputs are present")
 
-        previous_output_dir = previous_outputs.get(float_id)
-        float_output_name = _float_output_name(
-            float_id=float_id,
+        previous_output_dir = previous_outputs.get(group_key)
+        float_name = _resolve_float_name(
+            group_key=group_key,
             paths=current_sources,
             input_root=input_root,
             previous_output_dir=previous_output_dir,
             serial_map=serial_map,
+        )
+        canonical_float_id = _canonical_float_id(group_key=group_key, float_name=float_name)
+        float_output_name = _float_output_name(
+            group_key=group_key,
+            previous_output_dir=previous_output_dir,
+            float_name=float_name,
         )
         float_output_dir = output_dir / float_output_name
         if not dry_run:
@@ -163,14 +170,14 @@ def _run_stateful(
             previous_state,
             current_state,
             {"bin", "log", "mer"},
-            float_id=float_id,
+            float_id=canonical_float_id,
             run_id=None,
             decoder_state_changed=decoder_state_invalidated,
         )
         log_diff = _select_diff_rows(input_file_diffs, {"bin", "log"})
         mer_diff = _select_diff_rows(input_file_diffs, {"mer"})
         summary = FloatRunSummary(
-            float_id=float_id,
+            float_id=canonical_float_id,
             mode="stateful",
             output_dir=float_output_dir.as_posix(),
             bin_count=_count_kind(current_sources, "bin"),
@@ -237,11 +244,13 @@ def _run_stateful(
                 log_paths=_rewrite_paths(summary.log_action, current_sources, plan.log_diff, "log"),
                 bin_paths=_rewrite_paths(summary.log_action, current_sources, plan.log_diff, "bin"),
                 config=config,
+                float_id=summary.float_id,
             )
             _execute_mer_family(
                 float_output_dir=plan.float_output_dir,
                 action=summary.mer_action,
                 mer_paths=_rewrite_paths(summary.mer_action, current_sources, plan.mer_diff, "mer"),
+                float_id=summary.float_id,
             )
         except BaseException as exc:
             error = exc
@@ -284,15 +293,21 @@ def _run_stateless(
     processed_floats: list[FloatRunSummary] = []
     dry_run_floats: list[dict[str, object]] = []
 
-    for float_id, current_sources in sorted(grouped_sources.items()):
+    for group_key, current_sources in sorted(grouped_sources.items()):
         if any(path.suffix.upper() == ".BIN" for path in current_sources) and config is None:
             raise ValueError("decoder config is required when BIN inputs are present")
-        float_output_dir = output_dir / _float_output_name(
-            float_id=float_id,
+        float_name = _resolve_float_name(
+            group_key=group_key,
             paths=current_sources,
             input_root=None,
             previous_output_dir=None,
             serial_map={},
+        )
+        canonical_float_id = _canonical_float_id(group_key=group_key, float_name=float_name)
+        float_output_dir = output_dir / _float_output_name(
+            group_key=group_key,
+            previous_output_dir=None,
+            float_name=float_name,
         )
         input_file_diffs = _diff_sources(
             None,
@@ -303,12 +318,12 @@ def _run_stateless(
                 normalization_version=normalization_version,
             ),
             {"bin", "log", "mer"},
-            float_id=float_id,
+            float_id=canonical_float_id,
             run_id=None,
             decoder_state_changed=False,
         )
         summary = FloatRunSummary(
-            float_id=float_id,
+            float_id=canonical_float_id,
             mode="stateless",
             output_dir=float_output_dir.as_posix(),
             bin_count=_count_kind(current_sources, "bin"),
@@ -339,11 +354,13 @@ def _run_stateless(
             log_paths=_selected_paths(current_sources, {"log"}),
             bin_paths=_selected_paths(current_sources, {"bin"}),
             config=config,
+            float_id=summary.float_id,
         )
         _execute_mer_family(
             float_output_dir=float_output_dir,
             action="append",
             mer_paths=_selected_paths(current_sources, {"mer"}),
+            float_id=summary.float_id,
         )
         processed_floats.append(summary)
 
@@ -372,6 +389,7 @@ def _execute_log_family(
     log_paths: list[Path],
     bin_paths: list[Path],
     config: Bin2LogConfig | None,
+    float_id: str,
 ) -> None:
     destinations = [float_output_dir / filename for filename in LOG_OUTPUT_FILENAMES.values()]
     if action == "noop":
@@ -402,7 +420,7 @@ def _execute_log_family(
                 shutil.copy2(path, workdir / path.name)
             prepare_decode_workspace(workdir, config=decode_config, refresh_database=True)
             rendered_paths.extend(decode_workspace_logs(workdir, config=decode_config))
-        write_log_jsonl_prototypes(rendered_paths, temp_dir)
+        write_log_jsonl_prototypes(rendered_paths, temp_dir, float_id=float_id)
         if action == "append":
             _append_rendered_outputs(
                 temp_dir=temp_dir,
@@ -422,6 +440,7 @@ def _execute_mer_family(
     float_output_dir: Path,
     action: str,
     mer_paths: list[Path],
+    float_id: str,
 ) -> None:
     destinations = [float_output_dir / filename for filename in MER_OUTPUT_FILENAMES.values()]
     if action == "noop":
@@ -435,7 +454,7 @@ def _execute_mer_family(
     float_output_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="mermaid-mer-family-") as tmpdir:
         temp_dir = Path(tmpdir)
-        write_mer_jsonl_prototypes(mer_paths, temp_dir)
+        write_mer_jsonl_prototypes(mer_paths, temp_dir, float_id=float_id)
         if action == "append":
             _append_rendered_outputs(
                 temp_dir=temp_dir,
@@ -504,69 +523,81 @@ def _detect_mode(
 def _group_paths(paths: list[Path]) -> dict[str, list[Path]]:
     grouped: dict[str, list[Path]] = {}
     for path in sorted(paths):
-        grouped.setdefault(_float_id(path), []).append(path)
+        grouped.setdefault(_raw_file_prefix(path), []).append(path)
     return grouped
 
 
-def _float_id(path: Path) -> str:
+def _raw_file_prefix(path: Path) -> str:
     return path.stem.split("_", maxsplit=1)[0]
-
-
-_SERIAL_RE = re.compile(r"^\d+\.\d+-[A-Z]+-\d+$")
 
 
 def _float_output_name(
     *,
-    float_id: str,
-    paths: list[Path],
-    input_root: Path | None,
+    group_key: str,
     previous_output_dir: Path | None,
-    serial_map: dict[str, str],
+    float_name: FloatName | None,
 ) -> str:
-    if float_id in serial_map:
-        return serial_map[float_id]
+    if float_name is not None:
+        return float_name.serial
     if previous_output_dir is not None and _looks_like_full_serial(previous_output_dir.name):
         return previous_output_dir.name
-    candidate = _discover_full_serial(paths=paths, input_root=input_root)
-    if candidate is not None:
-        return candidate
     if previous_output_dir is not None:
         return previous_output_dir.name
-    return float_id
+    return group_key
 
 
-def _serials_from_vit(input_root: Path) -> dict[str, str]:
-    serial_map: dict[str, str] = {}
+def _float_names_from_vit(input_root: Path) -> dict[str, FloatName]:
+    serial_map: dict[str, FloatName] = {}
     for path in sorted(input_root.glob("*.vit")) + sorted(input_root.glob("*.VIT")):
-        serial = path.stem
-        if not _looks_like_full_serial(serial):
+        float_name = float_name_from_vit_path(path)
+        if float_name is None:
             continue
-        serial_map[_short_id_from_serial(serial)] = serial
+        serial_map[float_name.raw_file_prefix] = float_name
     return serial_map
 
 
-def _short_id_from_serial(serial: str) -> str:
-    return serial.rsplit("-", maxsplit=1)[-1]
-
-
-def _discover_full_serial(*, paths: list[Path], input_root: Path | None) -> str | None:
-    if input_root is not None and _looks_like_full_serial(input_root.name):
-        return input_root.name
+def _resolve_float_name(
+    *,
+    group_key: str,
+    paths: list[Path],
+    input_root: Path | None,
+    previous_output_dir: Path | None,
+    serial_map: dict[str, FloatName],
+) -> FloatName | None:
+    if group_key in serial_map:
+        return serial_map[group_key]
+    if input_root is not None:
+        candidate = maybe_parse_float_name(input_root.name)
+        if candidate is not None and candidate.raw_file_prefix == group_key:
+            return candidate
+    if previous_output_dir is not None:
+        candidate = maybe_parse_float_name(previous_output_dir.name)
+        if candidate is not None:
+            return candidate
     for path in paths:
         for ancestor in path.parents:
             if input_root is not None and ancestor == input_root.parent:
                 break
-            if _looks_like_full_serial(ancestor.name):
-                return ancestor.name
+            candidate = maybe_parse_float_name(ancestor.name)
+            if candidate is not None:
+                return candidate
     for path in paths:
         serial = _serial_from_log(path)
         if serial is not None:
-            return serial
+            candidate = maybe_parse_float_name(serial)
+            if candidate is not None:
+                return candidate
     return None
 
 
 def _looks_like_full_serial(name: str) -> bool:
-    return _SERIAL_RE.match(name) is not None
+    return maybe_parse_float_name(name) is not None
+
+
+def _canonical_float_id(*, group_key: str, float_name: FloatName | None) -> str:
+    if float_name is not None:
+        return float_name.float_id
+    return group_key
 
 
 def _serial_from_log(path: Path) -> str | None:
@@ -601,8 +632,7 @@ def _previous_outputs_by_float_id(output_dir: Path) -> dict[str, Path]:
         raw_sources = state.get("raw_sources", [])
         if not raw_sources:
             continue
-        float_id = _float_id(Path(raw_sources[0]["source_file"]))
-        previous[float_id] = float_output_dir
+        previous[_raw_file_prefix(Path(raw_sources[0]["source_file"]))] = float_output_dir
     return previous
 
 

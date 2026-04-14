@@ -86,6 +86,23 @@ def test_write_log_jsonl_prototypes_preserves_unclassified_records(
     assert {
         record["message"] for record in unclassified_records
     } == {"<WARN>timeout", "buoy 467.174-T-0100"}
+    assert all(record["float_id"] == "0100" for record in operational_records)
+
+
+def test_write_log_jsonl_prototypes_accepts_canonical_float_id_override(
+    tmp_path: Path,
+) -> None:
+    log_path = tmp_path / "0100_sample.LOG"
+    log_path.write_text(
+        "1700000000:[MAIN  ,0007]buoy 467.174-T-0100\n",
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "jsonl"
+    write_log_jsonl_prototypes([log_path], output_dir, float_id="T0100")
+    operational_records = _read_jsonl(output_dir / "log_operational_records.jsonl")
+
+    assert operational_records[0]["float_id"] == "T0100"
 
 
 def test_write_log_jsonl_prototypes_classifies_legacy_pump_and_outflow_lines(

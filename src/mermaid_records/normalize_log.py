@@ -13,6 +13,7 @@ from typing import Iterable
 
 from .models import OperationalLogEntry
 from .operational_raw import iter_operational_log_entries
+from .parse_float_name import maybe_parse_float_name
 
 OUTPUT_FILENAMES = {
     "operational": "log_operational_records.jsonl",
@@ -74,13 +75,13 @@ class LogJsonlPrototypeSummary:
     common_unclassified_patterns: list[dict[str, object]]
 
 
-def _common_log_record_fields(entry: OperationalLogEntry) -> dict[str, object]:
+def _common_log_record_fields(entry: OperationalLogEntry, *, float_id: str) -> dict[str, object]:
     """Return shared provenance and source fields for LOG-derived records."""
 
     return {
         "record_time": entry.time.isoformat(),
         "log_epoch_time": _log_epoch_time(entry),
-        "float_id": _float_id(entry.source_file),
+        "float_id": float_id,
         "source_container": "log",
         "source_file": entry.source_file.as_posix(),
         "subsystem": entry.subsystem,
@@ -93,6 +94,8 @@ def _common_log_record_fields(entry: OperationalLogEntry) -> dict[str, object]:
 def write_log_jsonl_prototypes(
     log_paths: Iterable[Path],
     output_dir: Path,
+    *,
+    float_id: str | None = None,
 ) -> LogJsonlPrototypeSummary:
     """Write conservative LOG-derived JSONL prototype streams."""
 
@@ -133,16 +136,17 @@ def write_log_jsonl_prototypes(
         output_paths["unclassified"].open("w", encoding="utf-8") as unclassified_handle,
     ):
         for path in sorted_paths:
+            path_float_id = float_id or _fallback_float_id(path)
             for entry in iter_operational_log_entries(path):
                 if entry.source_kind != "log":
                     continue
 
                 total_records += 1
-                acquisition_record = _classify_acquisition(entry)
-                ascent_request_record = _classify_ascent_request(entry)
-                gps_record = _classify_gps(entry)
-                transmission_record = _classify_transmission(entry)
-                measurement_record = _classify_measurement(entry)
+                acquisition_record = _classify_acquisition(entry, float_id=path_float_id)
+                ascent_request_record = _classify_ascent_request(entry, float_id=path_float_id)
+                gps_record = _classify_gps(entry, float_id=path_float_id)
+                transmission_record = _classify_transmission(entry, float_id=path_float_id)
+                measurement_record = _classify_measurement(entry, float_id=path_float_id)
                 severity = _severity(entry.message)
                 message_kind = _message_kind(
                     entry,
@@ -152,7 +156,7 @@ def write_log_jsonl_prototypes(
                     has_transmission=transmission_record is not None,
                     has_measurement=measurement_record is not None,
                 )
-                common_fields = _common_log_record_fields(entry)
+                common_fields = _common_log_record_fields(entry, float_id=path_float_id)
                 operational_record = {
                     **common_fields,
                     "severity": severity,
@@ -294,7 +298,7 @@ def _severity(message: str) -> str | None:
     return None
 
 
-def _classify_acquisition(entry: OperationalLogEntry) -> dict[str, object] | None:
+def _classify_acquisition(entry: OperationalLogEntry, *, float_id: str) -> dict[str, object] | None:
     normalized_message = " ".join(entry.message.lower().split())
     mapping = {
         "acq started": ("started", "transition"),
@@ -308,13 +312,13 @@ def _classify_acquisition(entry: OperationalLogEntry) -> dict[str, object] | Non
 
     acquisition_state, acquisition_evidence_kind = details
     return {
-        **_common_log_record_fields(entry),
+        **_common_log_record_fields(entry, float_id=float_id),
         "acquisition_state": acquisition_state,
         "acquisition_evidence_kind": acquisition_evidence_kind,
     }
 
 
-def _classify_ascent_request(entry: OperationalLogEntry) -> dict[str, object] | None:
+def _classify_ascent_request(entry: OperationalLogEntry, *, float_id: str) -> dict[str, object] | None:
     normalized_message = " ".join(entry.message.lower().split())
     mapping = {
         "ascent request accepted": "accepted",
@@ -325,12 +329,12 @@ def _classify_ascent_request(entry: OperationalLogEntry) -> dict[str, object] | 
         return None
 
     return {
-        **_common_log_record_fields(entry),
+        **_common_log_record_fields(entry, float_id=float_id),
         "ascent_request_state": ascent_request_state,
     }
 
 
-def _classify_gps(entry: OperationalLogEntry) -> dict[str, object] | None:
+def _classify_gps(entry: OperationalLogEntry, *, float_id: str) -> dict[str, object] | None:
     message = entry.message.strip()
     gps_record_kind: str | None = None
     raw_values: dict[str, str] | None = None
@@ -368,17 +372,17 @@ def _classify_gps(entry: OperationalLogEntry) -> dict[str, object] | None:
         return None
 
     return {
-        **_common_log_record_fields(entry),
+        **_common_log_record_fields(entry, float_id=float_id),
         "gps_record_kind": gps_record_kind,
         "raw_values": raw_values,
     }
 
 
-def _classify_transmission(entry: OperationalLogEntry) -> dict[str, object] | None:
+def _classify_transmission(entry: OperationalLogEntry, *, float_id: str) -> dict[str, object] | None:
     message = entry.message
     if "Upload data files" in message:
         return {
-            **_common_log_record_fields(entry),
+            **_common_log_record_fields(entry, float_id=float_id),
             "transmission_kind": "upload_batch",
             "referenced_artifact": None,
             "rate_bytes_per_s": None,
@@ -389,14 +393,14 @@ def _classify_transmission(entry: OperationalLogEntry) -> dict[str, object] | No
         return None
 
     return {
-        **_common_log_record_fields(entry),
+        **_common_log_record_fields(entry, float_id=float_id),
         "transmission_kind": "upload_artifact",
         "referenced_artifact": uploaded_match.group("artifact"),
         "rate_bytes_per_s": int(uploaded_match.group("rate")),
     }
 
 
-def _classify_measurement(entry: OperationalLogEntry) -> dict[str, object] | None:
+def _classify_measurement(entry: OperationalLogEntry, *, float_id: str) -> dict[str, object] | None:
     message = entry.message
     raw_values: dict[str, str] = {}
     measurement_kind: str | None = None
@@ -448,13 +452,17 @@ def _classify_measurement(entry: OperationalLogEntry) -> dict[str, object] | Non
         return None
 
     return {
-        **_common_log_record_fields(entry),
+        **_common_log_record_fields(entry, float_id=float_id),
         "measurement_kind": measurement_kind,
         "raw_values": raw_values,
     }
 
 
-def _float_id(path: Path) -> str:
+def _fallback_float_id(path: Path) -> str:
+    for candidate in (path.parent.name, path.stem):
+        parsed = maybe_parse_float_name(candidate)
+        if parsed is not None:
+            return parsed.float_id
     return path.stem.split("_", maxsplit=1)[0]
 
 

@@ -12,6 +12,7 @@ import re
 from typing import Iterable
 
 from .mer_raw import parse_mer_file
+from .parse_float_name import maybe_parse_float_name
 
 OUTPUT_FILENAMES = {
     "environment": "mer_environment_records.jsonl",
@@ -106,6 +107,8 @@ def _common_mer_record_fields(float_id: str, path: Path) -> dict[str, object]:
 def write_mer_jsonl_prototypes(
     mer_paths: Iterable[Path],
     output_dir: Path,
+    *,
+    float_id: str | None = None,
 ) -> MerJsonlPrototypeSummary:
     """Write conservative MER-derived JSONL prototype streams."""
 
@@ -140,13 +143,13 @@ def write_mer_jsonl_prototypes(
         for path in sorted(Path(path) for path in mer_paths):
             total_mer_files += 1
             metadata, blocks = parse_mer_file(path)
-            float_id = _float_id(path)
+            path_float_id = float_id or _fallback_float_id(path)
             if not blocks:
                 zero_event_files += 1
 
             for line in metadata.raw_environment_lines:
                 record, tag_name = _build_environment_record(
-                    float_id=float_id,
+                    float_id=path_float_id,
                     path=path,
                     line=line,
                 )
@@ -168,7 +171,7 @@ def write_mer_jsonl_prototypes(
 
             for line in metadata.raw_parameter_lines:
                 record, tag_name = _build_parameter_record(
-                    float_id=float_id,
+                    float_id=path_float_id,
                     path=path,
                     line=line,
                 )
@@ -188,7 +191,7 @@ def write_mer_jsonl_prototypes(
             for block_index, block in enumerate(blocks):
                 record, block_unknown_info_keys, block_unknown_format_keys = (
                     _build_data_record(
-                        float_id=float_id,
+                        float_id=path_float_id,
                         path=path,
                         block_index=block_index,
                         raw_info_line=block.raw_info_line,
@@ -366,7 +369,11 @@ def _parse_bare_tag_value(line: str, tag_name: str) -> str | None:
     return match.group("value")
 
 
-def _float_id(path: Path) -> str:
+def _fallback_float_id(path: Path) -> str:
+    for candidate in (path.parent.name, path.stem):
+        parsed = maybe_parse_float_name(candidate)
+        if parsed is not None:
+            return parsed.float_id
     return path.stem.split("_", maxsplit=1)[0]
 
 
