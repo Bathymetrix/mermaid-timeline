@@ -26,6 +26,7 @@ def test_stateful_run_writes_per_float_outputs_and_manifests(tmp_path: Path) -> 
     latest = _read_json(float_dir / "manifests" / "latest.json")
     run_json = _read_json(float_dir / latest["run_manifest"])
     source_state = _read_json(float_dir / latest["source_state_manifest"])
+    diff_rows = _jsonl_lines(float_dir / "manifests" / "runs" / latest["run_id"] / "input_file_diffs.jsonl")
 
     assert summary.mode == "stateful"
     assert [item.float_id for item in summary.processed_floats] == ["06"]
@@ -35,6 +36,9 @@ def test_stateful_run_writes_per_float_outputs_and_manifests(tmp_path: Path) -> 
     assert source_state["input_root"] == input_root.as_posix()
     assert source_state["normalization_version"] == "0.1.0"
     assert {item["source_kind"] for item in source_state["raw_sources"]} == {"log", "mer"}
+    assert {item["change_kind"] for item in diff_rows} == {"new"}
+    assert all(item["run_id"] == latest["run_id"] for item in diff_rows)
+    assert {item["source_file"] for item in diff_rows} == {"06_first.LOG", "06_first.MER"}
 
 
 def test_stateful_append_path_appends_only_new_files(tmp_path: Path) -> None:
@@ -129,6 +133,11 @@ def test_decoder_state_invalidates_only_bin_dependent_float(tmp_path: Path, monk
     assert by_float["0200"].log_action == "noop"
     assert bin_lines[0]["message"] == "decoded b"
     assert log_only_before == log_only_after
+    latest = _read_json(output_root / "0100" / "manifests" / "latest.json")
+    diff_rows = _jsonl_lines(output_root / "0100" / "manifests" / "runs" / latest["run_id"] / "input_file_diffs.jsonl")
+    assert diff_rows[0]["change_kind"] == "unchanged"
+    assert diff_rows[0]["decoder_state_changed"] is True
+    assert diff_rows[0]["source_file"] == "0100_first.BIN"
 
 
 def test_stateless_mode_isolated_and_rejects_existing_manifests(tmp_path: Path) -> None:
@@ -155,6 +164,46 @@ def test_stateless_mode_isolated_and_rejects_existing_manifests(tmp_path: Path) 
             output_dir=output_root,
             input_files=[log_path],
         )
+
+
+def test_dry_run_is_side_effect_free_and_reports_file_diffs(tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    (input_root / "467.174-T-0100.vit").write_text("", encoding="utf-8")
+    log_path = input_root / "0100_first.LOG"
+    mer_path = input_root / "0100_first.MER"
+    _write_log(log_path, "first")
+    _write_mer(mer_path)
+
+    output_root = tmp_path / "output"
+    run_normalization_pipeline(input_root, output_dir=output_root)
+
+    _write_log(log_path, "first changed")
+    _write_log(input_root / "0100_second.LOG", "second")
+    mer_path.unlink()
+
+    latest_before = _read_json(output_root / "467.174-T-0100" / "manifests" / "latest.json")
+    runs_root = output_root / "467.174-T-0100" / "manifests" / "runs"
+    run_ids_before = sorted(path.name for path in runs_root.iterdir() if path.is_dir())
+    summary = run_normalization_pipeline(input_root, output_dir=output_root, dry_run=True)
+    payload = summary.to_dict()
+
+    assert summary.mode == "stateful"
+    assert _read_json(output_root / "467.174-T-0100" / "manifests" / "latest.json") == latest_before
+    assert sorted(path.name for path in runs_root.iterdir() if path.is_dir()) == run_ids_before
+    assert not (output_root / "467.174-T-0100" / "state" / "pruned_records.jsonl").exists()
+    float_payload = payload["floats"][0]
+    assert float_payload["counts"] == {
+        "total": 3,
+        "new": 1,
+        "changed": 1,
+        "removed": 1,
+        "unchanged": 0,
+    }
+    assert float_payload["families"]["log"]["action"] == "rewrite"
+    assert float_payload["families"]["mer"]["action"] == "rewrite"
+    assert {row["change_kind"] for row in float_payload["families"]["log"]["file_diffs"]} == {"new", "changed"}
+    assert {row["change_kind"] for row in float_payload["families"]["mer"]["file_diffs"]} == {"removed"}
 
 
 def _write_log(path: Path, message: str) -> None:

@@ -53,6 +53,7 @@ def finalize_float_run(
     context: dict[str, object],
     preflight_mode: str | None,
     error: BaseException | None,
+    input_file_diffs: list[dict[str, object]] | None = None,
 ) -> None:
     """Write per-float manifests for a completed or failed run."""
 
@@ -75,6 +76,7 @@ def finalize_float_run(
     _write_json(run_dir / "run.json", run_json)
     _write_json(run_dir / "outputs.json", outputs_json)
     _write_json(run_dir / "source_state.json", source_state)
+    _write_jsonl(run_dir / "input_file_diffs.jsonl", input_file_diffs or [])
 
     preflight_root = float_output_dir / "preflight_status.json"
     if preflight_root.exists():
@@ -189,7 +191,7 @@ def record_pruned_sources(
     with pruned_path.open("a", encoding="utf-8") as handle:
         for source in removed_sources:
             record = {
-                "source_file": source["source_file"],
+                "source_file": source.get("_source_path", source["source_file"]),
                 "source_kind": source["source_kind"],
                 "float_id": float_id,
                 "removed_at": removed_at,
@@ -300,3 +302,10 @@ def _iso_now() -> str:
 
 def _write_json(path: Path, payload: dict[str, object]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, sort_keys=True))
+            handle.write("\n")

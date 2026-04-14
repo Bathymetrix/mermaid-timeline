@@ -36,6 +36,7 @@ Per float:
         run.json
         outputs.json
         source_state.json
+        input_file_diffs.jsonl
         preflight_status.json
 ```
 
@@ -45,6 +46,7 @@ Notes:
 - `run.json` stores run metadata and status.
 - `outputs.json` stores output inventory and row counts.
 - `source_state.json` stores raw source identity and decoder-state identity.
+- `input_file_diffs.jsonl` stores one row per raw source file with file-level diff fields only.
 - `preflight_status.json` is present when BIN preflight ran.
 
 ## Incremental Rerun Model
@@ -99,6 +101,7 @@ Planned dry-run/report behavior should:
 - compute the same rerun decisions as a real stateful run
 - report per-float and per-family actions such as `append`, `rewrite`, and `noop`
 - be completely side-effect free
+- support both human-readable and JSON dry-run output
 
 Constraint:
 

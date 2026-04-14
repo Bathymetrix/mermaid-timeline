@@ -215,3 +215,4 @@ Avoid:
 - JSONL outputs use deterministic processing order, not time-order.
 - Do not mutate existing JSONL outputs in place; append and full rewrite are the only safe modification paths.
 - Future dry-run/report behavior must be completely side-effect free, including no file writes of any kind.
+- Persisted `manifests/runs/<run_id>/input_file_diffs.jsonl` is a strict raw input diff log: file-level fields only, no append/rewrite/noop semantics, and no standalone non-file invalidation records.

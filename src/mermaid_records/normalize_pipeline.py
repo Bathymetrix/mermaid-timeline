@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-import json
 from pathlib import Path
 import re
 import shutil
@@ -16,7 +15,6 @@ from .bin2log import Bin2LogConfig, decode_workspace_logs, prepare_decode_worksp
 from .discovery import iter_bin_files, iter_log_files, iter_mer_files
 from .manifest import (
     begin_float_run,
-    build_outputs_manifest,
     build_source_state,
     finalize_float_run,
     latest_source_state,
@@ -48,6 +46,18 @@ class FloatRunSummary:
 
 
 @dataclass(slots=True)
+class PlannedFloatRun:
+    """Shared per-float plan used for real runs and dry runs."""
+
+    summary: FloatRunSummary
+    current_sources: list[Path]
+    float_output_dir: Path
+    log_diff: dict[str, list[dict[str, object]]]
+    mer_diff: dict[str, list[dict[str, object]]]
+    input_file_diffs: list[dict[str, object]]
+
+
+@dataclass(slots=True)
 class NormalizationPipelineSummary:
     """Aggregate summary for one normalization pipeline run."""
 
@@ -63,21 +73,48 @@ class NormalizationPipelineSummary:
         return asdict(self)
 
 
+@dataclass(slots=True)
+class DryRunSummary:
+    """Aggregate dry-run planning summary."""
+
+    mode: str
+    input_root: str | None
+    input_files: list[str]
+    output_dir: str
+    floats: list[dict[str, object]]
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-serializable summary payload."""
+
+        return asdict(self)
+
+
 def run_normalization_pipeline(
     input_root: Path | None = None,
     *,
     output_dir: Path,
     config: Bin2LogConfig | None = None,
     input_files: list[Path] | None = None,
-) -> NormalizationPipelineSummary:
+    dry_run: bool = False,
+) -> NormalizationPipelineSummary | DryRunSummary:
     """Run the normalization pipeline in stateful or stateless mode."""
 
     mode = _detect_mode(input_root=input_root, input_files=input_files)
     if mode == "stateful":
         assert input_root is not None
-        return _run_stateful(input_root=input_root, output_dir=output_dir, config=config)
+        return _run_stateful(
+            input_root=input_root,
+            output_dir=output_dir,
+            config=config,
+            dry_run=dry_run,
+        )
     assert input_files is not None
-    return _run_stateless(input_files=input_files, output_dir=output_dir, config=config)
+    return _run_stateless(
+        input_files=input_files,
+        output_dir=output_dir,
+        config=config,
+        dry_run=dry_run,
+    )
 
 
 def _run_stateful(
@@ -85,16 +122,18 @@ def _run_stateful(
     input_root: Path,
     output_dir: Path,
     config: Bin2LogConfig | None,
-) -> NormalizationPipelineSummary:
+    dry_run: bool,
+) -> NormalizationPipelineSummary | DryRunSummary:
     serial_map = _serials_from_vit(input_root)
     grouped_sources = _group_paths(
         [*sorted(iter_bin_files(input_root)), *sorted(iter_log_files(input_root)), *sorted(iter_mer_files(input_root))]
     )
-    output_dir.mkdir(parents=True, exist_ok=True)
-    previous_outputs = _previous_outputs_by_float_id(output_dir)
+    if not dry_run:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    previous_outputs = _previous_outputs_by_float_id(output_dir) if output_dir.exists() else {}
     all_float_ids = sorted(set(grouped_sources) | set(previous_outputs))
-    processed_floats: list[FloatRunSummary] = []
     normalization_version = _normalization_version()
+    planned_floats: list[PlannedFloatRun] = []
 
     for float_id in all_float_ids:
         current_sources = grouped_sources.get(float_id, [])
@@ -110,7 +149,8 @@ def _run_stateful(
             serial_map=serial_map,
         )
         float_output_dir = output_dir / float_output_name
-        _migrate_output_dir(previous_output_dir, float_output_dir)
+        if not dry_run:
+            _migrate_output_dir(previous_output_dir, float_output_dir)
         previous_state = latest_source_state(float_output_dir)
         current_state = build_source_state(
             raw_source_paths=current_sources,
@@ -118,50 +158,90 @@ def _run_stateful(
             input_root=input_root,
             normalization_version=normalization_version,
         )
-        log_diff = _diff_sources(previous_state, current_state, {"bin", "log"})
-        mer_diff = _diff_sources(previous_state, current_state, {"mer"})
         decoder_state_invalidated = _decoder_state_invalidated(previous_state, current_state)
-        log_action = _determine_action(
-            diff=log_diff,
-            invalidate=_general_invalidation(previous_state, current_state) or (
-                decoder_state_invalidated and _bin_dependent(previous_state, current_state)
-            ),
+        input_file_diffs = _diff_sources(
+            previous_state,
+            current_state,
+            {"bin", "log", "mer"},
+            float_id=float_id,
+            run_id=None,
+            decoder_state_changed=decoder_state_invalidated,
         )
-        mer_action = _determine_action(
-            diff=mer_diff,
-            invalidate=_general_invalidation(previous_state, current_state),
+        log_diff = _select_diff_rows(input_file_diffs, {"bin", "log"})
+        mer_diff = _select_diff_rows(input_file_diffs, {"mer"})
+        summary = FloatRunSummary(
+            float_id=float_id,
+            mode="stateful",
+            output_dir=float_output_dir.as_posix(),
+            bin_count=_count_kind(current_sources, "bin"),
+            log_count=_count_kind(current_sources, "log"),
+            mer_count=_count_kind(current_sources, "mer"),
+            log_action=_determine_action(
+                diff=log_diff,
+                invalidate=_general_invalidation(previous_state, current_state) or (
+                    decoder_state_invalidated and _bin_dependent(previous_state, current_state)
+                ),
+            ),
+            mer_action=_determine_action(
+                diff=mer_diff,
+                invalidate=_general_invalidation(previous_state, current_state),
+            ),
+            decoder_state_invalidated=decoder_state_invalidated,
+        )
+        planned_floats.append(
+            PlannedFloatRun(
+                summary=summary,
+                current_sources=current_sources,
+                float_output_dir=float_output_dir,
+                log_diff=log_diff,
+                mer_diff=mer_diff,
+                input_file_diffs=input_file_diffs,
+            )
         )
 
+    if dry_run:
+        return DryRunSummary(
+            mode="stateful",
+            input_root=input_root.as_posix(),
+            input_files=[],
+            output_dir=output_dir.as_posix(),
+            floats=[_dry_run_float_payload(plan) for plan in planned_floats],
+        )
+
+    processed_floats: list[FloatRunSummary] = []
+    for plan in planned_floats:
+        current_sources = plan.current_sources
+        summary = plan.summary
+
         record_pruned_sources(
-            float_output_dir=float_output_dir,
-            float_id=float_id,
-            removed_sources=log_diff["removed"] + mer_diff["removed"],
+            float_output_dir=plan.float_output_dir,
+            float_id=summary.float_id,
+            removed_sources=plan.log_diff["removed"] + plan.mer_diff["removed"],
         )
 
         run_context = begin_float_run(
-            float_output_dir=float_output_dir,
+            float_output_dir=plan.float_output_dir,
             input_root=input_root,
             raw_source_paths=current_sources,
             config=config if _has_kind(current_sources, "bin") else None,
             normalization_version=normalization_version,
         )
+        run_id = str(run_context["run_id"])
+        input_file_diffs = [{**row, "run_id": run_id} for row in plan.input_file_diffs]
+
         error: BaseException | None = None
         try:
             _execute_log_family(
-                float_output_dir=float_output_dir,
-                action=log_action,
-                log_paths=_selected_paths(current_sources, {"log"}) if log_action == "rewrite" else _paths_from_sources(
-                    [item for item in log_diff["added"] if item["source_kind"] == "log"]
-                ),
-                bin_paths=_selected_paths(current_sources, {"bin"}) if log_action == "rewrite" else _paths_from_sources(
-                    [item for item in log_diff["added"] if item["source_kind"] == "bin"]
-                ),
+                float_output_dir=plan.float_output_dir,
+                action=summary.log_action,
+                log_paths=_rewrite_paths(summary.log_action, current_sources, plan.log_diff, "log"),
+                bin_paths=_rewrite_paths(summary.log_action, current_sources, plan.log_diff, "bin"),
                 config=config,
             )
             _execute_mer_family(
-                float_output_dir=float_output_dir,
-                action=mer_action,
-                mer_paths=_selected_paths(current_sources, {"mer"}) if mer_action == "rewrite" else _paths_from_sources(mer_diff["added"]),
+                float_output_dir=plan.float_output_dir,
+                action=summary.mer_action,
+                mer_paths=_rewrite_paths(summary.mer_action, current_sources, plan.mer_diff, "mer"),
             )
         except BaseException as exc:
             error = exc
@@ -171,21 +251,10 @@ def _run_stateful(
                 context=run_context,
                 preflight_mode=config.preflight_mode if config is not None and _has_kind(current_sources, "bin") else None,
                 error=error,
+                input_file_diffs=_public_diff_rows(input_file_diffs),
             )
 
-        processed_floats.append(
-            FloatRunSummary(
-                float_id=float_id,
-                mode="stateful",
-                output_dir=float_output_dir.as_posix(),
-                bin_count=_count_kind(current_sources, "bin"),
-                log_count=_count_kind(current_sources, "log"),
-                mer_count=_count_kind(current_sources, "mer"),
-                log_action=log_action,
-                mer_action=mer_action,
-                decoder_state_invalidated=decoder_state_invalidated,
-            )
-        )
+        processed_floats.append(summary)
 
     return NormalizationPipelineSummary(
         mode="stateful",
@@ -201,15 +270,19 @@ def _run_stateless(
     input_files: list[Path],
     output_dir: Path,
     config: Bin2LogConfig | None,
-) -> NormalizationPipelineSummary:
+    dry_run: bool,
+) -> NormalizationPipelineSummary | DryRunSummary:
     if output_dir_contains_manifests(output_dir):
         raise ValueError(
             "stateless mode cannot write into an output directory that already contains manifests"
         )
 
     grouped_sources = _group_paths(input_files)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if not dry_run:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    normalization_version = _normalization_version()
     processed_floats: list[FloatRunSummary] = []
+    dry_run_floats: list[dict[str, object]] = []
 
     for float_id, current_sources in sorted(grouped_sources.items()):
         if any(path.suffix.upper() == ".BIN" for path in current_sources) and config is None:
@@ -221,6 +294,45 @@ def _run_stateless(
             previous_output_dir=None,
             serial_map={},
         )
+        input_file_diffs = _diff_sources(
+            None,
+            build_source_state(
+                raw_source_paths=current_sources,
+                config=config if _has_kind(current_sources, "bin") else None,
+                input_root=Path("."),
+                normalization_version=normalization_version,
+            ),
+            {"bin", "log", "mer"},
+            float_id=float_id,
+            run_id=None,
+            decoder_state_changed=False,
+        )
+        summary = FloatRunSummary(
+            float_id=float_id,
+            mode="stateless",
+            output_dir=float_output_dir.as_posix(),
+            bin_count=_count_kind(current_sources, "bin"),
+            log_count=_count_kind(current_sources, "log"),
+            mer_count=_count_kind(current_sources, "mer"),
+            log_action="append" if _has_kind(current_sources, "bin") or _has_kind(current_sources, "log") else "noop",
+            mer_action="append" if _has_kind(current_sources, "mer") else "noop",
+            decoder_state_invalidated=False,
+        )
+        if dry_run:
+            dry_run_floats.append(
+                _dry_run_float_payload(
+                    PlannedFloatRun(
+                        summary=summary,
+                        current_sources=current_sources,
+                        float_output_dir=float_output_dir,
+                        log_diff=_select_diff_rows(input_file_diffs, {"bin", "log"}),
+                        mer_diff=_select_diff_rows(input_file_diffs, {"mer"}),
+                        input_file_diffs=input_file_diffs,
+                    )
+                )
+            )
+            continue
+
         _execute_log_family(
             float_output_dir=float_output_dir,
             action="append",
@@ -233,18 +345,15 @@ def _run_stateless(
             action="append",
             mer_paths=_selected_paths(current_sources, {"mer"}),
         )
-        processed_floats.append(
-            FloatRunSummary(
-                float_id=float_id,
-                mode="stateless",
-                output_dir=float_output_dir.as_posix(),
-                bin_count=_count_kind(current_sources, "bin"),
-                log_count=_count_kind(current_sources, "log"),
-                mer_count=_count_kind(current_sources, "mer"),
-                log_action="append" if _has_kind(current_sources, "bin") or _has_kind(current_sources, "log") else "noop",
-                mer_action="append" if _has_kind(current_sources, "mer") else "noop",
-                decoder_state_invalidated=False,
-            )
+        processed_floats.append(summary)
+
+    if dry_run:
+        return DryRunSummary(
+            mode="stateless",
+            input_root=None,
+            input_files=[path.as_posix() for path in sorted(input_files)],
+            output_dir=output_dir.as_posix(),
+            floats=dry_run_floats,
         )
 
     return NormalizationPipelineSummary(
@@ -530,14 +639,18 @@ def _count_kind(paths: list[Path], kind: str) -> int:
 
 
 def _paths_from_sources(sources: list[dict[str, object]]) -> list[Path]:
-    return [Path(source["source_file"]) for source in sources]
+    return [Path(str(source.get("_source_path", source["source_file"]))) for source in sources]
 
 
 def _diff_sources(
     previous_state: dict[str, object] | None,
     current_state: dict[str, object],
     kinds: set[str],
-) -> dict[str, list[dict[str, object]]]:
+    *,
+    float_id: str,
+    run_id: str | None,
+    decoder_state_changed: bool,
+) -> list[dict[str, object]]:
     previous_sources = {
         item["source_file"]: item
         for item in (previous_state or {}).get("raw_sources", [])
@@ -548,14 +661,56 @@ def _diff_sources(
         for item in current_state["raw_sources"]
         if item["source_kind"] in kinds
     }
-    added = [current_sources[path] for path in sorted(set(current_sources) - set(previous_sources))]
-    removed = [previous_sources[path] for path in sorted(set(previous_sources) - set(current_sources))]
-    changed = [
-        current_sources[path]
-        for path in sorted(set(previous_sources) & set(current_sources))
-        if previous_sources[path]["content_hash"] != current_sources[path]["content_hash"]
-    ]
-    return {"added": added, "removed": removed, "changed": changed}
+    rows: list[dict[str, object]] = []
+    for source_file in sorted(set(previous_sources) | set(current_sources)):
+        previous = previous_sources.get(source_file)
+        current = current_sources.get(source_file)
+        previous_exists = previous is not None
+        current_exists = current is not None
+        previous_size = int(previous["size_bytes"]) if previous is not None else 0
+        current_size = int(current["size_bytes"]) if current is not None else 0
+        previous_hash = str(previous["content_hash"]) if previous is not None else None
+        current_hash = str(current["content_hash"]) if current is not None else None
+        source = current or previous
+        assert source is not None
+        if not previous_exists:
+            change_kind = "new"
+        elif not current_exists:
+            change_kind = "removed"
+        elif previous_hash != current_hash:
+            change_kind = "changed"
+        else:
+            change_kind = "unchanged"
+        rows.append(
+            {
+                "source_file": Path(source_file).name,
+                "_source_path": source_file,
+                "source_kind": source["source_kind"],
+                "float_id": float_id,
+                "previous_exists": previous_exists,
+                "current_exists": current_exists,
+                "previous_size_bytes": previous_size,
+                "current_size_bytes": current_size,
+                "previous_hash": previous_hash,
+                "current_hash": current_hash,
+                "change_kind": change_kind,
+                "decoder_state_changed": bool(decoder_state_changed and source["source_kind"] == "bin"),
+                "run_id": run_id,
+            }
+        )
+    return rows
+
+
+def _select_diff_rows(
+    rows: list[dict[str, object]],
+    kinds: set[str],
+) -> dict[str, list[dict[str, object]]]:
+    selected = [row for row in rows if row["source_kind"] in kinds]
+    return {
+        "added": [row for row in selected if row["change_kind"] == "new"],
+        "removed": [row for row in selected if row["change_kind"] == "removed"],
+        "changed": [row for row in selected if row["change_kind"] == "changed"],
+    }
 
 
 def _determine_action(*, diff: dict[str, list[dict[str, object]]], invalidate: bool) -> str:
@@ -607,3 +762,73 @@ def _normalization_version() -> str:
     if not isinstance(version, str):
         raise RuntimeError("mermaid_records.__version__ is not available")
     return version
+
+
+def _rewrite_paths(
+    action: str,
+    current_sources: list[Path],
+    diff: dict[str, list[dict[str, object]]],
+    kind: str,
+) -> list[Path]:
+    if action == "rewrite":
+        return _selected_paths(current_sources, {kind})
+    return _paths_from_sources([item for item in diff["added"] if item["source_kind"] == kind])
+
+
+def _dry_run_float_payload(plan: PlannedFloatRun) -> dict[str, object]:
+    counts = {
+        "total": len(plan.input_file_diffs),
+        "new": sum(1 for row in plan.input_file_diffs if row["change_kind"] == "new"),
+        "changed": sum(1 for row in plan.input_file_diffs if row["change_kind"] == "changed"),
+        "removed": sum(1 for row in plan.input_file_diffs if row["change_kind"] == "removed"),
+        "unchanged": sum(1 for row in plan.input_file_diffs if row["change_kind"] == "unchanged"),
+    }
+    return {
+        "float_id": plan.summary.float_id,
+        "output_dir": plan.summary.output_dir,
+        "counts": counts,
+        "families": {
+            "log": {
+                "action": plan.summary.log_action,
+                "file_diffs": _changed_file_rows(plan.input_file_diffs, {"bin", "log"}),
+                "decoder_invalidated": _decoder_invalidated_rows(plan.input_file_diffs, {"bin", "log"}),
+            },
+            "mer": {
+                "action": plan.summary.mer_action,
+                "file_diffs": _changed_file_rows(plan.input_file_diffs, {"mer"}),
+                "decoder_invalidated": [],
+            },
+        },
+    }
+
+
+def _changed_file_rows(
+    rows: list[dict[str, object]],
+    kinds: set[str],
+) -> list[dict[str, object]]:
+    return [
+        _public_diff_row(row)
+        for row in rows
+        if row["source_kind"] in kinds and row["change_kind"] in {"new", "changed", "removed"}
+    ]
+
+
+def _decoder_invalidated_rows(
+    rows: list[dict[str, object]],
+    kinds: set[str],
+) -> list[dict[str, object]]:
+    return [
+        _public_diff_row(row)
+        for row in rows
+        if row["source_kind"] in kinds
+        and row["decoder_state_changed"]
+        and row["change_kind"] == "unchanged"
+    ]
+
+
+def _public_diff_rows(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    return [_public_diff_row(row) for row in rows]
+
+
+def _public_diff_row(row: dict[str, object]) -> dict[str, object]:
+    return {key: value for key, value in row.items() if key != "_source_path"}

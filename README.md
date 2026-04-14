@@ -57,6 +57,18 @@ Run the normalization pipeline with `BIN` decode enabled:
 MERMAID=/path/to/mermaid mermaid-records normalize -i /path/to/input-root -o /path/to/output-dir --decoder-python /path/to/decoder-env/bin/python --decoder-script /path/to/automaid/scripts/preprocess.py
 ```
 
+Preview the normalization plan without writing outputs or manifests:
+
+```sh
+mermaid-records normalize -i /path/to/input-root -o /path/to/output-dir --dry-run
+```
+
+Print the dry-run plan as JSON:
+
+```sh
+mermaid-records normalize -i /path/to/input-root -o /path/to/output-dir --dry-run --json
+```
+
 The `normalize` command writes:
 
 - one subdirectory per float under the output root
@@ -65,6 +77,7 @@ The `normalize` command writes:
   - `log_operational_records.jsonl`
   - `mer_environment_records.jsonl`
 - per-float `manifests/` in stateful mode
+- per-run `manifests/runs/<run_id>/input_file_diffs.jsonl` in stateful mode
 - per-float `state/` for pruning records in stateful mode
 - per-float `preflight_status.json` when BIN decode preflight runs
 
@@ -72,6 +85,7 @@ Stateful mode:
 - triggered by `--input-root`
 - uses manifests and incremental rerun detection
 - for full-corpus runs, resolves float serials from `<serial>.vit` files in the input root
+- `--dry-run` reuses the same planning and diff logic but performs no filesystem writes
 
 Stateless mode:
 - triggered by `--input-file`

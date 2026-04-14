@@ -69,6 +69,16 @@ def build_parser() -> argparse.ArgumentParser:
         default="strict",
         help="BIN decode preflight policy: strict requires successful live refresh; cached warns and continues on cached decoder state.",
     )
+    normalize.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Compute the normalization plan and file-level diffs without writing files.",
+    )
+    normalize.add_argument(
+        "--json",
+        action="store_true",
+        help="Print dry-run output as structured JSON instead of a human-readable plan.",
+    )
     normalize.set_defaults(handler=_handle_normalize)
 
     return parser
@@ -101,8 +111,13 @@ def _handle_normalize(args: argparse.Namespace) -> int:
         output_dir=args.output_dir,
         config=config,
         input_files=_parse_input_files(args.input_file),
+        dry_run=args.dry_run,
     )
-    print(json.dumps(summary.to_dict(), sort_keys=True))
+    payload = summary.to_dict()
+    if args.dry_run and not args.json:
+        print(_format_dry_run(payload))
+    else:
+        print(json.dumps(payload, sort_keys=True))
     return 0
 
 
@@ -120,6 +135,42 @@ def _parse_input_files(values: list[list[str]] | None) -> list[Path] | None:
                 if token:
                     paths.append(Path(token))
     return paths
+
+
+def _format_dry_run(payload: dict[str, object]) -> str:
+    lines: list[str] = []
+    for float_payload in payload["floats"]:
+        counts = float_payload["counts"]
+        lines.append(f"FLOAT {Path(float_payload['output_dir']).name}")
+        lines.append(
+            "  files: "
+            f"total={counts['total']} new={counts['new']} changed={counts['changed']} "
+            f"removed={counts['removed']} unchanged={counts['unchanged']}"
+        )
+        for family_name in ("log", "mer"):
+            family = float_payload["families"][family_name]
+            lines.append(f"  {family_name}: {family['action']}")
+            for change_kind in ("new", "changed", "removed"):
+                rows = [row for row in family["file_diffs"] if row["change_kind"] == change_kind]
+                if not rows:
+                    continue
+                lines.append(f"    {change_kind}:")
+                for row in rows:
+                    lines.append(f"      - {_format_diff_row(row)}")
+            if family["decoder_invalidated"]:
+                lines.append("    decoder-invalidated:")
+                for row in family["decoder_invalidated"]:
+                    lines.append(f"      - {_format_diff_row(row)}")
+    return "\n".join(lines)
+
+
+def _format_diff_row(row: dict[str, object]) -> str:
+    name = Path(row["source_file"]).name
+    previous_size = int(row["previous_size_bytes"])
+    current_size = int(row["current_size_bytes"])
+    if row["change_kind"] == "changed":
+        return f"{name} (hash changed, {previous_size} B -> {current_size} B)"
+    return f"{name} ({previous_size} B -> {current_size} B)"
 
 
 if __name__ == "__main__":

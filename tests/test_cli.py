@@ -101,3 +101,66 @@ def test_normalize_cli_accepts_comma_and_space_separated_input_files(tmp_path: P
         log_c.as_posix(),
     ]
     assert (output_dir / "467.174-T-0100" / "log_operational_records.jsonl").exists()
+
+
+def test_normalize_cli_dry_run_human_output_is_side_effect_free(tmp_path: Path, capsys) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    (input_root / "467.174-T-0100.vit").write_text("", encoding="utf-8")
+    log_path = input_root / "0100_sample.LOG"
+    log_path.write_text(
+        "1700000000:[MAIN  ,0007]buoy 467.174-T-0100\n",
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "output"
+    result = main(
+        [
+            "normalize",
+            "-i",
+            str(input_root),
+            "-o",
+            str(output_dir),
+            "--dry-run",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "FLOAT 467.174-T-0100" in captured.out
+    assert "log: append" in captured.out
+    assert not output_dir.exists()
+
+
+def test_normalize_cli_dry_run_json_output(tmp_path: Path, capsys) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    (input_root / "467.174-T-0100.vit").write_text("", encoding="utf-8")
+    log_path = input_root / "0100_sample.LOG"
+    log_path.write_text(
+        "1700000000:[MAIN  ,0007]buoy 467.174-T-0100\n",
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "output"
+    result = main(
+        [
+            "normalize",
+            "-i",
+            str(input_root),
+            "-o",
+            str(output_dir),
+            "--dry-run",
+            "--json",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert result == 0
+    assert payload["mode"] == "stateful"
+    assert payload["floats"][0]["families"]["log"]["action"] == "append"
+    assert payload["floats"][0]["families"]["log"]["file_diffs"][0]["change_kind"] == "new"
+    assert not output_dir.exists()
