@@ -24,13 +24,17 @@ python -m pip install --upgrade pip setuptools wheel
 python -m pip install -e '.[dev]'
 ```
 
+After activation, the remainder of the README uses plain `python`, e.g.,
+
+```sh
+mermaid-records normalize -i ~/mermaid/server_everyone  --decoder-python  ~/miniconda3/envs/pymaid3.10/bin/python --decoder-script $AUTOMAID/scripts/preprocess.py -o ~/mermaid/records
+```
+
 If the virtual environment is not activated, you can invoke the installed CLI directly as:
 
 ```sh
 ./.venv/bin/mermaid-records --help
 ```
-
-After activation, the remainder of the README uses plain `python`.
 
 ## Package CLI
 
