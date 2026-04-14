@@ -325,3 +325,16 @@ Future layers (SQLite, APIs, analysis tools) are responsible for abstraction.
 - We still need to design per-file incremental updates. Desired future behavior: if only a small subset of raw `LOG`/`MER`/`BIN` inputs change, the pipeline should be able to normalize only the affected files rather than discarding and rebuilding all outputs.
 - Open question for later: whether this package should accept an explicit decoder database directory override instead of relying only on `MERMAID/database`.
 - Incremental pipeline outputs are organized per float under the output root. For stateful corpus runs, the per-float directory name should be driven first by `<serial>.vit` files in the input root. Fall back to the short stem ID only when no authoritative full-serial mapping is available.
+
+## Current Pipeline Rules
+
+- The normalization pipeline has two execution modes:
+  - `stateful`: directory input, manifests enabled, incremental rerun logic enabled
+  - `stateless`: explicit file-list input, no manifests, no incremental logic, no pruning
+- Stateful incremental behavior is binary and conservative:
+  - append only when the only change is newly added raw source files
+  - rewrite when any previously seen raw source changes or is removed
+  - decoder-state changes invalidate only BIN-derived outputs for BIN-dependent floats
+- JSONL outputs are source-ordered, not time-sorted.
+- Do not mutate existing JSONL outputs in place; append and full rewrite are the only safe modification paths.
+- Future dry-run/report behavior must be completely side-effect free, including no file writes of any kind.
