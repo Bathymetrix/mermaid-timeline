@@ -17,6 +17,7 @@ The goal is correctness, stability, and release clarity, not feature expansion.
 - [x] Explicitly confirm that JSONL outputs are source-ordered and not time-sorted
 - [x] Explicitly confirm the manifest layout contract
 - [x] Explicitly confirm the canonical `float_id` formatting/output contract
+- [ ] Decide whether user-facing/package contract language should change from `float` to `instrument` (or another final term), and update consistently if so
 - [x] Record any intentionally unsupported behaviors so they do not drift back in
 
 ## Schema Audit
