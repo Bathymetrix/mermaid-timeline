@@ -159,6 +159,7 @@ For event blocks:
 - Discovery should cover only raw `BIN`, `LOG`, and `MER` inputs relevant to this package.
 - `LOG` is the native per-dive operational source.
 - A single `.MER` may include DET data from the current dive plus REG/REQ data from previous dives. Do not infer dive membership from `MerEventBlock.date` during parsing.
+- The normalize CLI matrix audit helper lives in `src/mermaid_records/audit_normalize_cli.py` with the repo script wrapper at `scripts/audit_normalize_cli_matrix.py`.
 
 ## Current Fixtures
 
@@ -179,6 +180,7 @@ The representative JSONL prototype fixture sets under `data/fixtures/log_example
 
 - If work shifts toward higher-level API design, abstraction tradeoffs, naming strategy, or broader architecture, say when it may be a good moment to consult ChatGPT and provide a concise handoff summary.
 - Do not be territorial about tool choice; suggest ChatGPT when it is likely to help with design-space exploration.
+- The normalize CLI matrix audit workflow should isolate each run in its own output sandbox, capture `stdout`/`stderr` per run, append one JSONL result row per attempt, and keep going after failures.
 
 ## Module Naming Rule
 

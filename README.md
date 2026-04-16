@@ -236,6 +236,49 @@ The repo still includes a small number of internal developer utilities for decod
 adapter work on tracked fixtures. These are not installed package entry points and
 should not be treated as parallel normalization workflows.
 
+### Audit Normalize CLI Combinations
+
+Use the matrix harness when you want to exercise `normalize` across output
+resolution, decoder resolution, preflight mode, `--dry-run`, `--force-rewrite`,
+`--json`, and `--verbose`, while continuing past failures and logging every run.
+
+The script writes:
+
+- one JSONL row per planned run to `audit_normalize_cli/reports/results.jsonl`
+- per-run `stdout.txt`, `stderr.txt`, `command.txt`, and `spec.json`
+- aggregate `summary.json` and `summary.md`
+- `inputs/all_raw_files.txt` so the exact stateless file list is captured
+
+Repo-local example:
+
+```sh
+python scripts/audit_normalize_cli_matrix.py \
+  --input-root ~/mermaid/server_everyone \
+  --output-root ~/Desktop/records_test \
+  --cli-command "mermaid-records"
+```
+
+If your machine exposes a wrapper command named `mermaid`, point the harness at it:
+
+```sh
+python scripts/audit_normalize_cli_matrix.py \
+  --input-root ~/mermaid/server_everyone \
+  --output-root ~/Desktop/records_test \
+  --cli-command "mermaid"
+```
+
+For BIN-containing corpora, provide valid decoder paths if you want the successful
+BIN combinations to run instead of being logged as skipped/unavailable:
+
+```sh
+python scripts/audit_normalize_cli_matrix.py \
+  --input-root ~/mermaid/server_everyone \
+  --output-root ~/Desktop/records_test \
+  --cli-command "mermaid-records" \
+  --decoder-python /path/to/decoder-env/bin/python \
+  --decoder-script /path/to/automaid/scripts/preprocess.py
+```
+
 ### Profile The Wrapped BIN To LOG Decode Path
 
 Profile the current batch decode workflow on the newer-generation fixture family:
