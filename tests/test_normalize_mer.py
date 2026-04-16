@@ -124,6 +124,34 @@ def test_write_mer_jsonl_prototypes_preserves_environment_parameter_and_data_row
     }
 
     assert data_records[0]["block_index"] == 0
+    assert list(data_records[0]) == [
+        "instrument_id",
+        "source_file",
+        "source_container",
+        "block_index",
+        "date",
+        "rounds",
+        "pressure",
+        "temperature",
+        "criterion",
+        "snr",
+        "trig",
+        "detrig",
+        "fname",
+        "smp_offset",
+        "true_fs",
+        "endianness",
+        "bytes_per_sample",
+        "sampling_rate",
+        "stages",
+        "normalized",
+        "length",
+        "data_payload_nbytes",
+        "expected_payload_nbytes",
+        "payload_length_matches_expected",
+        "raw_info_line",
+        "raw_format_line",
+    ]
     assert data_records[0]["date"] == "2024-02-07T22:47:22"
     assert data_records[0]["fname"] == "2024-02-07T22_47_22.000000"
     assert data_records[0]["smp_offset"] == "614054"
@@ -148,10 +176,10 @@ def test_write_mer_jsonl_prototypes_preserves_environment_parameter_and_data_row
     assert data_records[1]["payload_length_matches_expected"] is False
     assert "record_time" not in data_records[1]
     assert "time" not in data_records[1]
-    assert all(record["float_id"] == "0100" for record in data_records)
+    assert all(record["instrument_id"] == "0100" for record in data_records)
 
 
-def test_write_mer_jsonl_prototypes_accepts_canonical_float_id_override(tmp_path: Path) -> None:
+def test_write_mer_jsonl_prototypes_accepts_canonical_instrument_id_override(tmp_path: Path) -> None:
     mer_path = tmp_path / "0100_sample.MER"
     mer_path.write_bytes(
         (
@@ -172,10 +200,10 @@ def test_write_mer_jsonl_prototypes_accepts_canonical_float_id_override(tmp_path
     )
 
     output_dir = tmp_path / "jsonl"
-    write_mer_jsonl_prototypes([mer_path], output_dir, float_id="T0100")
+    write_mer_jsonl_prototypes([mer_path], output_dir, instrument_id="T0100")
     data_records = _read_jsonl(output_dir / "mer_data_records.jsonl")
 
-    assert data_records[0]["float_id"] == "T0100"
+    assert data_records[0]["instrument_id"] == "T0100"
 
 
 def test_write_mer_jsonl_prototypes_supports_rounds_info_field(tmp_path: Path) -> None:

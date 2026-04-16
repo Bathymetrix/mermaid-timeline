@@ -68,9 +68,9 @@ def test_normalize_cli_writes_log_and_mer_jsonl_outputs(tmp_path: Path, capsys) 
     assert "log records written=" in captured.out
     assert "mer records written=" in captured.out
     assert "Starting normalization" in captured.err
-    assert "Processing float T0100" in captured.err
-    assert "Normalizing LOG for float T0100" in captured.err
-    assert "Normalizing MER for float T0100" in captured.err
+    assert "Processing instrument T0100" in captured.err
+    assert "Normalizing LOG for instrument T0100" in captured.err
+    assert "Normalizing MER for instrument T0100" in captured.err
     assert (output_dir / "467.174-T-0100" / "log_operational_records.jsonl").exists()
     assert (output_dir / "467.174-T-0100" / "mer_environment_records.jsonl").exists()
     assert not (output_dir / "467.174-T-0100" / "preflight_status.json").exists()
@@ -165,8 +165,8 @@ def test_normalize_cli_dry_run_json_output(tmp_path: Path, capsys) -> None:
 
     assert result == 0
     assert payload["mode"] == "stateful"
-    assert payload["floats"][0]["families"]["log"]["action"] == "append"
-    assert payload["floats"][0]["families"]["log"]["file_diffs"][0]["change_kind"] == "new"
+    assert payload["instruments"][0]["families"]["log"]["action"] == "append"
+    assert payload["instruments"][0]["families"]["log"]["file_diffs"][0]["change_kind"] == "new"
     assert not output_dir.exists()
 
 

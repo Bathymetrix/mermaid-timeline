@@ -36,10 +36,10 @@ type ProgressCallback = Callable[[str], None]
 
 
 @dataclass(slots=True)
-class FloatRunSummary:
-    """Per-float execution summary for one normalization run."""
+class InstrumentRunSummary:
+    """Per-instrument execution summary for one normalization run."""
 
-    float_id: str
+    instrument_id: str
     mode: str
     output_dir: str
     bin_count: int
@@ -51,12 +51,12 @@ class FloatRunSummary:
 
 
 @dataclass(slots=True)
-class PlannedFloatRun:
-    """Shared per-float plan used for real runs and dry runs."""
+class PlannedInstrumentRun:
+    """Shared per-instrument plan used for real runs and dry runs."""
 
-    summary: FloatRunSummary
+    summary: InstrumentRunSummary
     current_sources: list[Path]
-    float_output_dir: Path
+    instrument_output_dir: Path
     log_diff: dict[str, list[dict[str, object]]]
     mer_diff: dict[str, list[dict[str, object]]]
     input_file_diffs: list[dict[str, object]]
@@ -70,7 +70,7 @@ class NormalizationPipelineSummary:
     input_root: str | None
     input_files: list[str]
     output_dir: str
-    processed_floats: list[FloatRunSummary]
+    processed_instruments: list[InstrumentRunSummary]
     metrics: RunMetrics
 
     def to_dict(self) -> dict[str, object]:
@@ -87,7 +87,7 @@ class DryRunSummary:
     input_root: str | None
     input_files: list[str]
     output_dir: str
-    floats: list[dict[str, object]]
+    instruments: list[dict[str, object]]
     metrics: RunMetrics
 
     def to_dict(self) -> dict[str, object]:
@@ -104,15 +104,15 @@ class RunMetrics:
     raw_files_new: int = 0
     raw_files_changed: int = 0
     raw_files_removed: int = 0
-    floats_append: int = 0
-    floats_rewrite: int = 0
-    floats_noop: int = 0
-    log_floats_append: int = 0
-    log_floats_rewrite: int = 0
-    log_floats_noop: int = 0
-    mer_floats_append: int = 0
-    mer_floats_rewrite: int = 0
-    mer_floats_noop: int = 0
+    instruments_append: int = 0
+    instruments_rewrite: int = 0
+    instruments_noop: int = 0
+    log_instruments_append: int = 0
+    log_instruments_rewrite: int = 0
+    log_instruments_noop: int = 0
+    mer_instruments_append: int = 0
+    mer_instruments_rewrite: int = 0
+    mer_instruments_noop: int = 0
     log_records_written: int = 0
     log_records_removed: int = 0
     mer_records_written: int = 0
@@ -172,10 +172,10 @@ def _run_stateful(
     )
     if not dry_run:
         output_dir.mkdir(parents=True, exist_ok=True)
-    previous_outputs = _previous_outputs_by_float_id(output_dir) if output_dir.exists() else {}
+    previous_outputs = _previous_outputs_by_instrument_id(output_dir) if output_dir.exists() else {}
     all_group_keys = sorted(set(grouped_sources) | set(previous_outputs))
     normalization_version = _normalization_version()
-    planned_floats: list[PlannedFloatRun] = []
+    planned_instruments: list[PlannedInstrumentRun] = []
     metrics = RunMetrics(preflight_mode=config.preflight_mode if config is not None else None)
 
     for group_key in all_group_keys:
@@ -191,16 +191,16 @@ def _run_stateful(
             previous_output_dir=previous_output_dir,
             serial_map=serial_map,
         )
-        canonical_float_id = _canonical_float_id(group_key=group_key, float_name=float_name)
-        float_output_name = _float_output_name(
+        canonical_instrument_id = _canonical_instrument_id(group_key=group_key, float_name=float_name)
+        instrument_output_name = _instrument_output_name(
             group_key=group_key,
             previous_output_dir=previous_output_dir,
             float_name=float_name,
         )
-        float_output_dir = output_dir / float_output_name
+        instrument_output_dir = output_dir / instrument_output_name
         if not dry_run:
-            _migrate_output_dir(previous_output_dir, float_output_dir)
-        previous_state = latest_source_state(float_output_dir)
+            _migrate_output_dir(previous_output_dir, instrument_output_dir)
+        previous_state = latest_source_state(instrument_output_dir)
         current_state = build_source_state(
             raw_source_paths=current_sources,
             config=config if _has_kind(current_sources, "bin") else None,
@@ -212,16 +212,16 @@ def _run_stateful(
             previous_state,
             current_state,
             {"bin", "log", "mer"},
-            float_id=canonical_float_id,
+            instrument_id=canonical_instrument_id,
             run_id=None,
             decoder_state_changed=decoder_state_invalidated,
         )
         log_diff = _select_diff_rows(input_file_diffs, {"bin", "log"})
         mer_diff = _select_diff_rows(input_file_diffs, {"mer"})
-        summary = FloatRunSummary(
-            float_id=canonical_float_id,
+        summary = InstrumentRunSummary(
+            instrument_id=canonical_instrument_id,
             mode="stateful",
-            output_dir=float_output_dir.as_posix(),
+            output_dir=instrument_output_dir.as_posix(),
             bin_count=_count_kind(current_sources, "bin"),
             log_count=_count_kind(current_sources, "log"),
             mer_count=_count_kind(current_sources, "mer"),
@@ -237,11 +237,11 @@ def _run_stateful(
             ),
             decoder_state_invalidated=decoder_state_invalidated,
         )
-        planned_floats.append(
-            PlannedFloatRun(
+        planned_instruments.append(
+            PlannedInstrumentRun(
                 summary=summary,
                 current_sources=current_sources,
-                float_output_dir=float_output_dir,
+                instrument_output_dir=instrument_output_dir,
                 log_diff=log_diff,
                 mer_diff=mer_diff,
                 input_file_diffs=input_file_diffs,
@@ -253,7 +253,7 @@ def _run_stateful(
     if dry_run:
         metrics.bin_files_decoded = sum(
             len(_rewrite_paths(plan.summary.log_action, plan.current_sources, plan.log_diff, "bin"))
-            for plan in planned_floats
+            for plan in planned_instruments
         )
         _emit_progress(progress, "Dry-run planning complete")
         return DryRunSummary(
@@ -261,25 +261,25 @@ def _run_stateful(
             input_root=input_root.as_posix(),
             input_files=[],
             output_dir=output_dir.as_posix(),
-            floats=[_dry_run_float_payload(plan) for plan in planned_floats],
+            instruments=[_dry_run_instrument_payload(plan) for plan in planned_instruments],
             metrics=metrics,
         )
 
-    processed_floats: list[FloatRunSummary] = []
-    for plan in planned_floats:
+    processed_instruments: list[InstrumentRunSummary] = []
+    for plan in planned_instruments:
         current_sources = plan.current_sources
         summary = plan.summary
-        _emit_progress(progress, f"Processing float {summary.float_id}")
-        previous_outputs = latest_outputs_manifest(plan.float_output_dir)
+        _emit_progress(progress, f"Processing instrument {summary.instrument_id}")
+        previous_outputs = latest_outputs_manifest(plan.instrument_output_dir)
 
         record_pruned_sources(
-            float_output_dir=plan.float_output_dir,
-            float_id=summary.float_id,
+            float_output_dir=plan.instrument_output_dir,
+            instrument_id=summary.instrument_id,
             removed_sources=plan.log_diff["removed"] + plan.mer_diff["removed"],
         )
 
         run_context = begin_float_run(
-            float_output_dir=plan.float_output_dir,
+            float_output_dir=plan.instrument_output_dir,
             input_root=input_root,
             raw_source_paths=current_sources,
             config=config if _has_kind(current_sources, "bin") else None,
@@ -298,22 +298,22 @@ def _run_stateful(
         error: BaseException | None = None
         try:
             _execute_log_family(
-                float_output_dir=plan.float_output_dir,
+                float_output_dir=plan.instrument_output_dir,
                 action=summary.log_action,
                 log_paths=log_paths,
                 bin_paths=bin_paths,
                 config=config,
-                float_id=summary.float_id,
+                instrument_id=summary.instrument_id,
                 progress=progress,
                 run_id=run_id,
                 malformed_log_lines=malformed_log_lines,
                 skipped_log_files=skipped_log_files,
             )
             _execute_mer_family(
-                float_output_dir=plan.float_output_dir,
+                float_output_dir=plan.instrument_output_dir,
                 action=summary.mer_action,
                 mer_paths=mer_paths,
-                float_id=summary.float_id,
+                instrument_id=summary.instrument_id,
                 progress=progress,
                 run_id=run_id,
                 malformed_mer_blocks=malformed_mer_blocks,
@@ -323,7 +323,7 @@ def _run_stateful(
             error = exc
             raise
         finally:
-            _emit_progress(progress, f"Writing manifests for float {summary.float_id}")
+            _emit_progress(progress, f"Writing manifests for instrument {summary.instrument_id}")
             finalize_float_run(
                 context=run_context,
                 preflight_mode=config.preflight_mode if config is not None and _has_kind(current_sources, "bin") else None,
@@ -346,18 +346,18 @@ def _run_stateful(
         _accumulate_output_metrics(
             metrics,
             previous_outputs=previous_outputs,
-            current_outputs=build_outputs_manifest(plan.float_output_dir),
+            current_outputs=build_outputs_manifest(plan.instrument_output_dir),
             log_action=summary.log_action,
             mer_action=summary.mer_action,
         )
-        processed_floats.append(summary)
+        processed_instruments.append(summary)
 
     return NormalizationPipelineSummary(
         mode="stateful",
         input_root=input_root.as_posix(),
         input_files=[],
         output_dir=output_dir.as_posix(),
-        processed_floats=processed_floats,
+        processed_instruments=processed_instruments,
         metrics=metrics,
     )
 
@@ -380,8 +380,8 @@ def _run_stateless(
     if not dry_run:
         output_dir.mkdir(parents=True, exist_ok=True)
     normalization_version = _normalization_version()
-    processed_floats: list[FloatRunSummary] = []
-    dry_run_floats: list[dict[str, object]] = []
+    processed_instruments: list[InstrumentRunSummary] = []
+    dry_run_instruments: list[dict[str, object]] = []
     metrics = RunMetrics(preflight_mode=config.preflight_mode if config is not None else None)
 
     for group_key, current_sources in sorted(grouped_sources.items()):
@@ -394,8 +394,8 @@ def _run_stateless(
             previous_output_dir=None,
             serial_map={},
         )
-        canonical_float_id = _canonical_float_id(group_key=group_key, float_name=float_name)
-        float_output_dir = output_dir / _float_output_name(
+        canonical_instrument_id = _canonical_instrument_id(group_key=group_key, float_name=float_name)
+        instrument_output_dir = output_dir / _instrument_output_name(
             group_key=group_key,
             previous_output_dir=None,
             float_name=float_name,
@@ -409,14 +409,14 @@ def _run_stateless(
                 normalization_version=normalization_version,
             ),
             {"bin", "log", "mer"},
-            float_id=canonical_float_id,
+            instrument_id=canonical_instrument_id,
             run_id=None,
             decoder_state_changed=False,
         )
-        summary = FloatRunSummary(
-            float_id=canonical_float_id,
+        summary = InstrumentRunSummary(
+            instrument_id=canonical_instrument_id,
             mode="stateless",
-            output_dir=float_output_dir.as_posix(),
+            output_dir=instrument_output_dir.as_posix(),
             bin_count=_count_kind(current_sources, "bin"),
             log_count=_count_kind(current_sources, "log"),
             mer_count=_count_kind(current_sources, "mer"),
@@ -428,12 +428,12 @@ def _run_stateless(
         _accumulate_action_metrics(metrics, summary)
         if dry_run:
             metrics.bin_files_decoded += _count_kind(current_sources, "bin")
-            dry_run_floats.append(
-                _dry_run_float_payload(
-                    PlannedFloatRun(
+            dry_run_instruments.append(
+                _dry_run_instrument_payload(
+                    PlannedInstrumentRun(
                         summary=summary,
                         current_sources=current_sources,
-                        float_output_dir=float_output_dir,
+                        instrument_output_dir=instrument_output_dir,
                         log_diff=_select_diff_rows(input_file_diffs, {"bin", "log"}),
                         mer_diff=_select_diff_rows(input_file_diffs, {"mer"}),
                         input_file_diffs=input_file_diffs,
@@ -442,7 +442,7 @@ def _run_stateless(
             )
             continue
 
-        _emit_progress(progress, f"Processing float {summary.float_id}")
+        _emit_progress(progress, f"Processing instrument {summary.instrument_id}")
         malformed_log_lines: list[dict[str, object]] = []
         skipped_log_files: list[dict[str, object]] = []
         malformed_mer_blocks: list[dict[str, object]] = []
@@ -451,22 +451,22 @@ def _run_stateless(
         bin_paths = _selected_paths(current_sources, {"bin"})
         mer_paths = _selected_paths(current_sources, {"mer"})
         _execute_log_family(
-            float_output_dir=float_output_dir,
+            float_output_dir=instrument_output_dir,
             action="append",
             log_paths=log_paths,
             bin_paths=bin_paths,
             config=config,
-            float_id=summary.float_id,
+            instrument_id=summary.instrument_id,
             progress=progress,
             run_id="stateless",
             malformed_log_lines=malformed_log_lines,
             skipped_log_files=skipped_log_files,
         )
         _execute_mer_family(
-            float_output_dir=float_output_dir,
+            float_output_dir=instrument_output_dir,
             action="append",
             mer_paths=mer_paths,
-            float_id=summary.float_id,
+            instrument_id=summary.instrument_id,
             progress=progress,
             run_id="stateless",
             malformed_mer_blocks=malformed_mer_blocks,
@@ -483,11 +483,11 @@ def _run_stateless(
         _accumulate_output_metrics(
             metrics,
             previous_outputs=None,
-            current_outputs=build_outputs_manifest(float_output_dir),
+            current_outputs=build_outputs_manifest(instrument_output_dir),
             log_action=summary.log_action,
             mer_action=summary.mer_action,
         )
-        processed_floats.append(summary)
+        processed_instruments.append(summary)
 
     if dry_run:
         _emit_progress(progress, "Dry-run planning complete")
@@ -496,7 +496,7 @@ def _run_stateless(
             input_root=None,
             input_files=[path.as_posix() for path in sorted(input_files)],
             output_dir=output_dir.as_posix(),
-            floats=dry_run_floats,
+            instruments=dry_run_instruments,
             metrics=metrics,
         )
 
@@ -505,7 +505,7 @@ def _run_stateless(
         input_root=None,
         input_files=[path.as_posix() for path in sorted(input_files)],
         output_dir=output_dir.as_posix(),
-        processed_floats=processed_floats,
+        processed_instruments=processed_instruments,
         metrics=metrics,
     )
 
@@ -517,7 +517,7 @@ def _execute_log_family(
     log_paths: list[Path],
     bin_paths: list[Path],
     config: Bin2LogConfig | None,
-    float_id: str,
+    instrument_id: str,
     progress: ProgressCallback | None,
     run_id: str | None,
     malformed_log_lines: list[dict[str, object]] | None,
@@ -534,14 +534,14 @@ def _execute_log_family(
     if bin_paths and config is None:
         raise ValueError("decoder config is required when BIN inputs are present")
 
-    _emit_progress(progress, f"Normalizing LOG for float {float_id}")
+    _emit_progress(progress, f"Normalizing LOG for instrument {instrument_id}")
     float_output_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="mermaid-log-family-") as tmpdir:
         temp_dir = Path(tmpdir)
         rendered_paths = list(log_paths)
         if bin_paths:
             assert config is not None
-            _emit_progress(progress, f"Running BIN decode for float {float_id}")
+            _emit_progress(progress, f"Running BIN decode for instrument {instrument_id}")
             decode_config = Bin2LogConfig(
                 python_executable=config.python_executable,
                 decoder_script=config.decoder_script,
@@ -563,7 +563,7 @@ def _execute_log_family(
         write_log_jsonl_prototypes(
             rendered_paths,
             temp_dir,
-            float_id=float_id,
+            instrument_id=instrument_id,
             run_id=run_id,
             malformed_log_lines=malformed_log_lines,
             skipped_log_files=skipped_log_files,
@@ -587,7 +587,7 @@ def _execute_mer_family(
     float_output_dir: Path,
     action: str,
     mer_paths: list[Path],
-    float_id: str,
+    instrument_id: str,
     progress: ProgressCallback | None,
     run_id: str | None,
     malformed_mer_blocks: list[dict[str, object]] | None,
@@ -602,14 +602,14 @@ def _execute_mer_family(
     if not mer_paths:
         return
 
-    _emit_progress(progress, f"Normalizing MER for float {float_id}")
+    _emit_progress(progress, f"Normalizing MER for instrument {instrument_id}")
     float_output_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="mermaid-mer-family-") as tmpdir:
         temp_dir = Path(tmpdir)
         write_mer_jsonl_prototypes(
             mer_paths,
             temp_dir,
-            float_id=float_id,
+            instrument_id=instrument_id,
             run_id=run_id,
             malformed_mer_blocks=malformed_mer_blocks,
             skipped_mer_files=skipped_mer_files,
@@ -690,7 +690,7 @@ def _raw_file_prefix(path: Path) -> str:
     return path.stem.split("_", maxsplit=1)[0]
 
 
-def _float_output_name(
+def _instrument_output_name(
     *,
     group_key: str,
     previous_output_dir: Path | None,
@@ -753,9 +753,9 @@ def _looks_like_full_serial(name: str) -> bool:
     return maybe_parse_float_name(name) is not None
 
 
-def _canonical_float_id(*, group_key: str, float_name: FloatName | None) -> str:
+def _canonical_instrument_id(*, group_key: str, float_name: FloatName | None) -> str:
     if float_name is not None:
-        return float_name.float_id
+        return float_name.instrument_id
     return group_key
 
 
@@ -781,7 +781,7 @@ def _serial_from_log(path: Path) -> str | None:
     return None
 
 
-def _previous_outputs_by_float_id(output_dir: Path) -> dict[str, Path]:
+def _previous_outputs_by_instrument_id(output_dir: Path) -> dict[str, Path]:
     previous: dict[str, Path] = {}
     for latest_path in output_dir.glob("*/manifests/latest.json"):
         float_output_dir = latest_path.parent.parent
@@ -836,7 +836,7 @@ def _diff_sources(
     current_state: dict[str, object],
     kinds: set[str],
     *,
-    float_id: str,
+    instrument_id: str,
     run_id: str | None,
     decoder_state_changed: bool,
 ) -> list[dict[str, object]]:
@@ -875,7 +875,7 @@ def _diff_sources(
                 "source_file": Path(source_file).name,
                 "_source_path": source_file,
                 "source_kind": source["source_kind"],
-                "float_id": float_id,
+                "instrument_id": instrument_id,
                 "previous_exists": previous_exists,
                 "current_exists": current_exists,
                 "previous_size_bytes": previous_size,
@@ -975,28 +975,28 @@ def _accumulate_diff_metrics(metrics: RunMetrics, rows: list[dict[str, object]])
             metrics.raw_files_removed += 1
 
 
-def _accumulate_action_metrics(metrics: RunMetrics, summary: FloatRunSummary) -> None:
-    overall_action = _overall_float_action(summary)
+def _accumulate_action_metrics(metrics: RunMetrics, summary: InstrumentRunSummary) -> None:
+    overall_action = _overall_instrument_action(summary)
     if overall_action == "append":
-        metrics.floats_append += 1
+        metrics.instruments_append += 1
     elif overall_action == "rewrite":
-        metrics.floats_rewrite += 1
+        metrics.instruments_rewrite += 1
     else:
-        metrics.floats_noop += 1
+        metrics.instruments_noop += 1
 
     if summary.log_action == "append":
-        metrics.log_floats_append += 1
+        metrics.log_instruments_append += 1
     elif summary.log_action == "rewrite":
-        metrics.log_floats_rewrite += 1
+        metrics.log_instruments_rewrite += 1
     else:
-        metrics.log_floats_noop += 1
+        metrics.log_instruments_noop += 1
 
     if summary.mer_action == "append":
-        metrics.mer_floats_append += 1
+        metrics.mer_instruments_append += 1
     elif summary.mer_action == "rewrite":
-        metrics.mer_floats_rewrite += 1
+        metrics.mer_instruments_rewrite += 1
     else:
-        metrics.mer_floats_noop += 1
+        metrics.mer_instruments_noop += 1
 
 
 def _accumulate_issue_metrics(
@@ -1047,7 +1047,7 @@ def _sum_counts(counts: dict[str, object], prefix: str) -> int:
     return sum(int(value) for key, value in counts.items() if key.startswith(prefix))
 
 
-def _overall_float_action(summary: FloatRunSummary) -> str:
+def _overall_instrument_action(summary: InstrumentRunSummary) -> str:
     if "rewrite" in {summary.log_action, summary.mer_action}:
         return "rewrite"
     if "append" in {summary.log_action, summary.mer_action}:
@@ -1055,7 +1055,7 @@ def _overall_float_action(summary: FloatRunSummary) -> str:
     return "noop"
 
 
-def _dry_run_float_payload(plan: PlannedFloatRun) -> dict[str, object]:
+def _dry_run_instrument_payload(plan: PlannedInstrumentRun) -> dict[str, object]:
     counts = {
         "total": len(plan.input_file_diffs),
         "new": sum(1 for row in plan.input_file_diffs if row["change_kind"] == "new"),
@@ -1064,7 +1064,7 @@ def _dry_run_float_payload(plan: PlannedFloatRun) -> dict[str, object]:
         "unchanged": sum(1 for row in plan.input_file_diffs if row["change_kind"] == "unchanged"),
     }
     return {
-        "float_id": plan.summary.float_id,
+        "instrument_id": plan.summary.instrument_id,
         "output_dir": plan.summary.output_dir,
         "counts": counts,
         "families": {

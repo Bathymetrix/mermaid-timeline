@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 
-"""Per-float manifest persistence for normalization pipeline runs."""
+"""Per-instrument manifest persistence for normalization pipeline runs."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def begin_float_run(
     config: Bin2LogConfig | None,
     normalization_version: str,
 ) -> dict[str, object]:
-    """Create manifest context for one float-level stateful run."""
+    """Create manifest context for one instrument-level stateful run."""
 
     started_at = _iso_now()
     run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
@@ -59,7 +59,7 @@ def finalize_float_run(
     malformed_mer_blocks: list[dict[str, object]] | None = None,
     skipped_mer_files: list[dict[str, object]] | None = None,
 ) -> None:
-    """Write per-float manifests for a completed or failed run."""
+    """Write per-instrument manifests for a completed or failed run."""
 
     run_dir = Path(context["run_dir"])
     manifests_root = Path(context["manifests_root"])
@@ -114,7 +114,7 @@ def finalize_float_run(
 
 
 def latest_source_state(float_output_dir: Path) -> dict[str, object] | None:
-    """Load the latest persisted source state for one float, if present."""
+    """Load the latest persisted source state for one instrument, if present."""
 
     latest_path = float_output_dir / "manifests" / "latest.json"
     if not latest_path.exists():
@@ -127,7 +127,7 @@ def latest_source_state(float_output_dir: Path) -> dict[str, object] | None:
 
 
 def latest_outputs_manifest(float_output_dir: Path) -> dict[str, object] | None:
-    """Load the latest persisted outputs manifest for one float, if present."""
+    """Load the latest persisted outputs manifest for one instrument, if present."""
 
     latest_path = float_output_dir / "manifests" / "latest.json"
     if not latest_path.exists():
@@ -154,7 +154,7 @@ def build_source_state(
     input_root: Path,
     normalization_version: str,
 ) -> dict[str, object]:
-    """Build source state for one float-level run."""
+    """Build source state for one instrument-level run."""
 
     raw_sources = [
         {
@@ -174,7 +174,7 @@ def build_source_state(
 
 
 def build_outputs_manifest(float_output_dir: Path) -> dict[str, object]:
-    """Build the output inventory for one float-level output root."""
+    """Build the output inventory for one instrument-level output root."""
 
     jsonl_outputs = [
         {
@@ -198,7 +198,7 @@ def build_outputs_manifest(float_output_dir: Path) -> dict[str, object]:
 def record_pruned_sources(
     *,
     float_output_dir: Path,
-    float_id: str,
+    instrument_id: str,
     removed_sources: list[dict[str, object]],
 ) -> None:
     """Append pruned-source records for removed raw files."""
@@ -212,12 +212,12 @@ def record_pruned_sources(
     with pruned_path.open("a", encoding="utf-8") as handle:
         for source in removed_sources:
             record = {
+                "instrument_id": instrument_id,
                 "source_file": source.get("_source_path", source["source_file"]),
                 "source_kind": source["source_kind"],
-                "float_id": float_id,
                 "removed_at": removed_at,
             }
-            handle.write(json.dumps(record, sort_keys=True))
+            handle.write(json.dumps(record))
             handle.write("\n")
 
 
@@ -328,5 +328,5 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
 def _write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     with path.open("w", encoding="utf-8") as handle:
         for row in rows:
-            handle.write(json.dumps(row, sort_keys=True))
+            handle.write(json.dumps(row))
             handle.write("\n")

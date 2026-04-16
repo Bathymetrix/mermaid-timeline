@@ -60,6 +60,19 @@ def test_write_log_jsonl_prototypes_preserves_unclassified_records(
     assert operational_records[0]["message_kind"] == "upload"
     assert operational_records[2]["message_kind"] == "measurement"
     assert operational_records[4]["severity"] == "warn"
+    assert list(operational_records[0]) == [
+        "instrument_id",
+        "source_file",
+        "source_container",
+        "record_time",
+        "log_epoch_time",
+        "subsystem",
+        "code",
+        "message",
+        "severity",
+        "message_kind",
+        "raw_line",
+    ]
     assert operational_records[0]["record_time"] == "2023-11-14T22:13:20"
     assert operational_records[0]["log_epoch_time"] == "1700000000"
     assert "time" not in operational_records[0]
@@ -86,10 +99,10 @@ def test_write_log_jsonl_prototypes_preserves_unclassified_records(
     assert {
         record["message"] for record in unclassified_records
     } == {"<WARN>timeout", "buoy 467.174-T-0100"}
-    assert all(record["float_id"] == "0100" for record in operational_records)
+    assert all(record["instrument_id"] == "0100" for record in operational_records)
 
 
-def test_write_log_jsonl_prototypes_accepts_canonical_float_id_override(
+def test_write_log_jsonl_prototypes_accepts_canonical_instrument_id_override(
     tmp_path: Path,
 ) -> None:
     log_path = tmp_path / "0100_sample.LOG"
@@ -99,10 +112,10 @@ def test_write_log_jsonl_prototypes_accepts_canonical_float_id_override(
     )
 
     output_dir = tmp_path / "jsonl"
-    write_log_jsonl_prototypes([log_path], output_dir, float_id="T0100")
+    write_log_jsonl_prototypes([log_path], output_dir, instrument_id="T0100")
     operational_records = _read_jsonl(output_dir / "log_operational_records.jsonl")
 
-    assert operational_records[0]["float_id"] == "T0100"
+    assert operational_records[0]["instrument_id"] == "T0100"
 
 
 def test_write_log_jsonl_prototypes_classifies_legacy_pump_and_outflow_lines(

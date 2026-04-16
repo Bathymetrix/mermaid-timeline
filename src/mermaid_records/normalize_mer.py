@@ -50,10 +50,10 @@ _PARAMETER_KIND_MAP = {
 
 _INFO_FIELDS = [
     "DATE",
+    "ROUNDS",
     "PRESSURE",
     "TEMPERATURE",
     "CRITERION",
-    "ROUNDS",
     "SNR",
     "TRIG",
     "DETRIG",
@@ -96,13 +96,13 @@ class MerJsonlPrototypeSummary:
     example_data_with_trigger_fields: dict[str, object] | None
 
 
-def _common_mer_record_fields(float_id: str, path: Path) -> dict[str, object]:
+def _common_mer_record_fields(instrument_id: str, path: Path) -> dict[str, object]:
     """Return shared provenance fields for MER-derived records."""
 
     return {
-        "float_id": float_id,
-        "source_container": "mer",
+        "instrument_id": instrument_id,
         "source_file": path.as_posix(),
+        "source_container": "mer",
     }
 
 
@@ -110,7 +110,7 @@ def write_mer_jsonl_prototypes(
     mer_paths: Iterable[Path],
     output_dir: Path,
     *,
-    float_id: str | None = None,
+    instrument_id: str | None = None,
     run_id: str | None = None,
     malformed_mer_blocks: list[dict[str, object]] | None = None,
     skipped_mer_files: list[dict[str, object]] | None = None,
@@ -148,7 +148,7 @@ def write_mer_jsonl_prototypes(
         for path in sorted(Path(path) for path in mer_paths):
             try:
                 total_mer_files += 1
-                path_float_id = float_id or _fallback_float_id(path)
+                path_instrument_id = instrument_id or _fallback_instrument_id(path)
                 def _record_malformed_block(
                     block_index: int | None,
                     block_kind: str,
@@ -160,7 +160,7 @@ def write_mer_jsonl_prototypes(
                     malformed_mer_blocks.append(
                         {
                             "run_id": run_id,
-                            "float_id": path_float_id,
+                            "instrument_id": path_instrument_id,
                             "source_file": path.as_posix(),
                             "block_index": block_index,
                             "block_kind": block_kind,
@@ -183,7 +183,7 @@ def write_mer_jsonl_prototypes(
 
                 for line in metadata.raw_environment_lines:
                     record, tag_name = _build_environment_record(
-                        float_id=path_float_id,
+                        instrument_id=path_instrument_id,
                         path=path,
                         line=line,
                     )
@@ -205,7 +205,7 @@ def write_mer_jsonl_prototypes(
 
                 for line in metadata.raw_parameter_lines:
                     record, tag_name = _build_parameter_record(
-                        float_id=path_float_id,
+                        instrument_id=path_instrument_id,
                         path=path,
                         line=line,
                     )
@@ -225,7 +225,7 @@ def write_mer_jsonl_prototypes(
                 for block_index, block in enumerate(blocks):
                     record, block_unknown_info_keys, block_unknown_format_keys = (
                         _build_data_record(
-                            float_id=path_float_id,
+                            instrument_id=path_instrument_id,
                             path=path,
                             block_index=block_index,
                             raw_info_line=block.raw_info_line,
@@ -260,7 +260,7 @@ def write_mer_jsonl_prototypes(
                 skipped_mer_files.append(
                     {
                         "run_id": run_id,
-                        "float_id": path_float_id,
+                        "instrument_id": path_instrument_id,
                         "source_file": path.as_posix(),
                         "error": str(exc),
                         "skipped_at": _iso_now(),
@@ -294,7 +294,7 @@ def write_mer_jsonl_prototypes(
 
 def _build_environment_record(
     *,
-    float_id: str,
+    instrument_id: str,
     path: Path,
     line: str,
 ) -> tuple[dict[str, object], str]:
@@ -305,7 +305,7 @@ def _build_environment_record(
     raw_values = _environment_raw_values(tag_name, stripped_line, attrs)
     return (
         {
-            **_common_mer_record_fields(float_id, path),
+            **_common_mer_record_fields(instrument_id, path),
             "environment_kind": environment_kind,
             "gpsinfo_date": attrs.get("DATE") if tag_name == "GPSINFO" else None,
             "raw_values": raw_values,
@@ -317,7 +317,7 @@ def _build_environment_record(
 
 def _build_parameter_record(
     *,
-    float_id: str,
+    instrument_id: str,
     path: Path,
     line: str,
 ) -> tuple[dict[str, object], str]:
@@ -328,7 +328,7 @@ def _build_parameter_record(
     raw_values = {key.lower(): value for key, value in attrs.items()} or None
     return (
         {
-            **_common_mer_record_fields(float_id, path),
+            **_common_mer_record_fields(instrument_id, path),
             "parameter_kind": parameter_kind,
             "raw_values": raw_values,
             "line": line,
@@ -339,7 +339,7 @@ def _build_parameter_record(
 
 def _build_data_record(
     *,
-    float_id: str,
+    instrument_id: str,
     path: Path,
     block_index: int,
     raw_info_line: str | None,
@@ -358,13 +358,13 @@ def _build_data_record(
         payload_length_matches_expected = actual_payload_nbytes == expected_payload_nbytes
 
     record = {
-        **_common_mer_record_fields(float_id, path),
+        **_common_mer_record_fields(instrument_id, path),
         "block_index": block_index,
         "date": info_attrs.get("DATE"),
+        "rounds": info_attrs.get("ROUNDS"),
         "pressure": info_attrs.get("PRESSURE"),
         "temperature": info_attrs.get("TEMPERATURE"),
         "criterion": info_attrs.get("CRITERION"),
-        "rounds": info_attrs.get("ROUNDS"),
         "snr": info_attrs.get("SNR"),
         "trig": info_attrs.get("TRIG"),
         "detrig": info_attrs.get("DETRIG"),
@@ -433,16 +433,16 @@ def _parse_bare_tag_value(line: str, tag_name: str) -> str | None:
     return match.group("value")
 
 
-def _fallback_float_id(path: Path) -> str:
+def _fallback_instrument_id(path: Path) -> str:
     for candidate in (path.parent.name, path.stem):
         parsed = maybe_parse_float_name(candidate)
         if parsed is not None:
-            return parsed.float_id
+            return parsed.instrument_id
     return path.stem.split("_", maxsplit=1)[0]
 
 
 def _write_jsonl_line(handle, record: dict[str, object]) -> None:
-    handle.write(json.dumps(record, sort_keys=True))
+    handle.write(json.dumps(record))
     handle.write("\n")
 
 

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 
-"""Canonical parsing helpers for MERMAID float serial names."""
+"""Canonical parsing helpers for MERMAID instrument serial names."""
 
 from __future__ import annotations
 
@@ -16,44 +16,44 @@ _SERIAL_RE = re.compile(
 
 @dataclass(frozen=True, slots=True)
 class FloatName:
-    """Canonical decomposition of an Osean float serial name."""
+    """Canonical decomposition of an Osean instrument serial name."""
 
     serial: str
     kinst: str
     float_code: str
     float_number: str
-    float_id: str
+    instrument_id: str
     kstnm: str
     raw_file_prefix: str
 
 
 def parse_float_name(serial: str) -> FloatName:
-    """Parse one canonical float serial name."""
+    """Parse one canonical instrument serial name."""
 
     match = _SERIAL_RE.fullmatch(serial)
     if match is None:
-        raise ValueError(f"Unsupported float serial name: {serial}")
+        raise ValueError(f"Unsupported instrument serial name: {serial}")
 
     kinst = match.group("kinst")
     float_code = match.group("float_code")
     float_number = match.group("float_number")
     padded_number = float_number.zfill(5 - len(float_code))
     if len(float_code + padded_number) > 5:
-        raise ValueError(f"Float code and number exceed 5-char station limit: {serial}")
+        raise ValueError(f"Instrument code and number exceed 5-char station limit: {serial}")
 
     return FloatName(
         serial=serial,
         kinst=kinst,
         float_code=float_code,
         float_number=float_number,
-        float_id=f"{float_code}{padded_number}",
+        instrument_id=f"{float_code}{padded_number}",
         kstnm=f"{float_code}{padded_number}",
         raw_file_prefix=float_number,
     )
 
 
 def maybe_parse_float_name(serial: str) -> FloatName | None:
-    """Parse one float serial name when possible."""
+    """Parse one instrument serial name when possible."""
 
     try:
         return parse_float_name(serial)
@@ -62,6 +62,6 @@ def maybe_parse_float_name(serial: str) -> FloatName | None:
 
 
 def float_name_from_vit_path(path: Path) -> FloatName | None:
-    """Parse a float name from one .vit path when possible."""
+    """Parse an instrument name from one .vit path when possible."""
 
     return maybe_parse_float_name(path.stem)

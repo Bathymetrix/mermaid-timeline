@@ -207,16 +207,16 @@ def _decoder_required(
 
 def _format_dry_run(payload: dict[str, object]) -> str:
     lines: list[str] = []
-    for float_payload in payload["floats"]:
-        counts = float_payload["counts"]
-        lines.append(f"FLOAT {Path(float_payload['output_dir']).name}")
+    for instrument_payload in payload["instruments"]:
+        counts = instrument_payload["counts"]
+        lines.append(f"INSTRUMENT {Path(instrument_payload['output_dir']).name}")
         lines.append(
             "  files: "
             f"total={counts['total']} new={counts['new']} changed={counts['changed']} "
             f"removed={counts['removed']} unchanged={counts['unchanged']}"
         )
         for family_name in ("log", "mer"):
-            family = float_payload["families"][family_name]
+            family = instrument_payload["families"][family_name]
             lines.append(f"  {family_name}: {family['action']}")
             for change_kind in ("new", "changed", "removed"):
                 rows = [row for row in family["file_diffs"] if row["change_kind"] == change_kind]
@@ -249,9 +249,9 @@ def _format_run_summary(
             f"removed={metrics.raw_files_removed}"
         ),
         (
-            "  floats: "
-            f"append={metrics.floats_append} rewrite={metrics.floats_rewrite} "
-            f"noop={metrics.floats_noop}"
+            "  instruments: "
+            f"append={metrics.instruments_append} rewrite={metrics.instruments_rewrite} "
+            f"noop={metrics.instruments_noop}"
         ),
     ]
 
@@ -295,13 +295,13 @@ def _format_run_summary(
                 "    family actions:",
                 (
                     "      log: "
-                    f"append={metrics.log_floats_append} rewrite={metrics.log_floats_rewrite} "
-                    f"noop={metrics.log_floats_noop}"
+                    f"append={metrics.log_instruments_append} rewrite={metrics.log_instruments_rewrite} "
+                    f"noop={metrics.log_instruments_noop}"
                 ),
                 (
                     "      mer: "
-                    f"append={metrics.mer_floats_append} rewrite={metrics.mer_floats_rewrite} "
-                    f"noop={metrics.mer_floats_noop}"
+                    f"append={metrics.mer_instruments_append} rewrite={metrics.mer_instruments_rewrite} "
+                    f"noop={metrics.mer_instruments_noop}"
                 ),
                 "      per-instrument actions:",
                 *_format_per_instrument_outputs(summary),
@@ -326,7 +326,7 @@ def _format_per_instrument_outputs(
                 f"log_family={item.log_action} mer_family={item.mer_action} | "
                 f"sources bin={item.bin_count} log={item.log_count} mer={item.mer_count}"
             )
-            for item in summary.processed_floats
+            for item in summary.processed_instruments
         ]
 
     return [
@@ -339,7 +339,7 @@ def _format_per_instrument_outputs(
             f"log={sum(1 for row in item['families']['log']['file_diffs'] if row['source_kind'] == 'log')} "
             f"mer={sum(1 for row in item['families']['mer']['file_diffs'] if row['source_kind'] == 'mer')}"
         )
-        for item in summary.floats
+        for item in summary.instruments
     ]
 
 

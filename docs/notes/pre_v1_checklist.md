@@ -16,8 +16,9 @@ The goal is correctness, stability, and release clarity, not feature expansion.
 - [x] Explicitly confirm all JSONL record-family schemas
 - [x] Explicitly confirm that JSONL outputs are source-ordered and not time-sorted
 - [x] Explicitly confirm the manifest layout contract
-- [x] Explicitly confirm the canonical `float_id` formatting/output contract
-- [ ] Decide whether user-facing/package contract language should change from `float` to `instrument` (or another final term), and update consistently if so
+- [x] Explicitly confirm the canonical `instrument_id` formatting/output contract
+- [x] Freeze canonical JSONL field ordering across emitted record families
+- [x] Update user-facing/package contract language from `float` to `instrument` where it refers to the physical platform
 - [x] Record any intentionally unsupported behaviors so they do not drift back in
 
 ## Schema Audit

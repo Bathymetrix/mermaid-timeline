@@ -57,7 +57,7 @@ Contract:
 - manifests are read and written
 - incremental rerun logic is enabled
 - pruning is enabled
-- float output directories use full serial names from `<serial>.vit` when available
+- instrument output directories use full serial names from `<serial>.vit` when available
 - dry-run reuses the same planning and diff logic but writes nothing
 
 ### Stateless
@@ -95,23 +95,23 @@ When a durable output directory is used, `preflight_status.json` records:
 - failure detail, if any
 - decoder executable/script identity and write time
 
-## Float Identity
+## Instrument Identity
 
-Canonical `float_id` resolution is centralized in `src/mermaid_records/parse_float_name.py`.
+Canonical `instrument_id` resolution is centralized in `src/mermaid_records/parse_float_name.py`.
 
 Examples:
 
-- `452.020-P-08` -> `float_id = P0008`
-- `467.174-T-0100` -> `float_id = T0100`
+- `452.020-P-08` -> `instrument_id = P0008`
+- `467.174-T-0100` -> `instrument_id = T0100`
 
 When a full serial is unavailable, the pipeline falls back conservatively to the raw file prefix.
 
 ## Output Layout
 
-Per float:
+Per instrument:
 
 ```text
-<output_root>/<float-serial>/
+<output_root>/<instrument-serial>/
   log_operational_records.jsonl
   log_acquisition_records.jsonl
   log_ascent_request_records.jsonl
@@ -138,8 +138,9 @@ Per float:
 
 Notes:
 
-- `preflight_status.json` at float root is present only when BIN preflight ran with a durable output directory.
-- `latest.json` points to the most recent run for that float.
+- JSONL field ordering is frozen semantically: provenance/identity, then time, then family metadata, then payload/accounting, then raw fallback fields.
+- `preflight_status.json` at instrument root is present only when BIN preflight ran with a durable output directory.
+- `latest.json` points to the most recent run for that instrument.
 - `run.json` stores run metadata and status.
 - `outputs.json` stores output inventory and row counts.
 - `source_state.json` stores raw source identity and decoder-state identity.
@@ -172,7 +173,7 @@ MER families:
 
 - `record_time`
 - `log_epoch_time`
-- `float_id`
+- `instrument_id`
 - `source_container`
 - `source_file`
 - `subsystem`
@@ -222,7 +223,7 @@ MER families:
 
 Shared MER provenance fields:
 
-- `float_id`
+- `instrument_id`
 - `source_container`
 - `source_file`
 
@@ -312,7 +313,7 @@ Shared MER provenance fields:
 - fields:
   - `source_file`
   - `source_kind`
-  - `float_id`
+  - `instrument_id`
   - `previous_exists`
   - `current_exists`
   - `previous_size_bytes`
@@ -341,14 +342,14 @@ This file is strictly file-level. It does not store append/rewrite/noop decision
 
 - `source_file`
 - `source_kind`
-- `float_id`
+- `instrument_id`
 - `removed_at`
 
 `removed_at` is the UTC timestamp when the pipeline detected and recorded the removal, not the underlying filesystem deletion time.
 
 ## Incremental Rerun Model
 
-Incremental rerun decisions are per float and per family.
+Incremental rerun decisions are per instrument and per family.
 
 Behavior:
 
@@ -384,7 +385,7 @@ When a previously tracked raw source file is missing in a later stateful run:
 Dry-run behavior:
 
 - compute the same rerun decisions as a real stateful run
-- report per-float and per-family actions such as `append`, `rewrite`, and `noop`
+- report per-instrument and per-family actions such as `append`, `rewrite`, and `noop`
 - be completely side-effect free
 - support both human-readable and JSON dry-run output
 - dry-run must not write files of any kind, including manifests, status files, or reports in the output tree

@@ -141,9 +141,9 @@ The `normalize` command supports exactly two execution modes:
 
 The `normalize` command writes:
 
-- one subdirectory per float under the output root
+- one subdirectory per instrument under the output root
 - in stateful corpus mode, full serial-number subdirectory names derived from `<serial>.vit` files in `--input-root`, for example `467.174-T-0100/`
-- per-float LOG JSONL outputs:
+- per-instrument LOG JSONL outputs:
   - `log_operational_records.jsonl`
   - `log_acquisition_records.jsonl`
   - `log_ascent_request_records.jsonl`
@@ -151,21 +151,22 @@ The `normalize` command writes:
   - `log_transmission_records.jsonl`
   - `log_measurement_records.jsonl`
   - `log_unclassified_records.jsonl`
-- per-float MER JSONL outputs:
+- per-instrument MER JSONL outputs:
   - `mer_environment_records.jsonl`
   - `mer_parameter_records.jsonl`
   - `mer_data_records.jsonl`
-- per-float `manifests/` in stateful mode
+- per-instrument `manifests/` in stateful mode
 - per-run `manifests/runs/<run_id>/input_file_diffs.jsonl` in stateful mode
-- per-float `state/` for pruning records in stateful mode
-- per-float `preflight_status.json` when BIN decode preflight runs and a durable output directory is in use
+- per-instrument `state/` for pruning records in stateful mode
+- per-instrument `preflight_status.json` when BIN decode preflight runs and a durable output directory is in use
 
 Invariant details:
 
 - JSONL outputs are ordered by deterministic source processing order, not time order
+- JSONL field ordering is explicit and stable: provenance/identity first, then time, then family metadata, then payload/accounting, then raw fallback fields
 - existing JSONL lines are never mutated in place; the safe update paths are append and full rewrite
 - dry-run reuses the same planning and diff logic as a real run but performs zero filesystem writes
-- canonical `float_id` is resolved from `src/mermaid_records/parse_float_name.py` when a full serial is available, for example `452.020-P-08 -> P0008` and `467.174-T-0100 -> T0100`
+- canonical `instrument_id` is resolved from `src/mermaid_records/parse_float_name.py` when a full serial is available, for example `452.020-P-08 -> P0008` and `467.174-T-0100 -> T0100`
 
 ## Decoder Requirements
 
