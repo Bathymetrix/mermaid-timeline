@@ -58,6 +58,27 @@ def test_stateful_run_writes_per_instrument_outputs_and_manifests(tmp_path: Path
     ]
 
 
+def test_stateful_mode_ignores_out_of_scope_file_types(tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    (input_root / "467.174-T-0100.vit").write_text("", encoding="utf-8")
+    _write_log(input_root / "0100_first.LOG", "first")
+    (input_root / "0100_first.S61").write_bytes(b"ignored")
+    (input_root / "0100_first.S41").write_bytes(b"ignored")
+    (input_root / "0100_first.RBR").write_bytes(b"ignored")
+
+    output_root = tmp_path / "output"
+    summary = run_normalization_pipeline(input_root, output_dir=output_root)
+
+    instrument_dir = output_root / "467.174-T-0100"
+    source_state = _read_json(instrument_dir / "manifests" / "runs" / _read_json(instrument_dir / "manifests" / "latest.json")["run_id"] / "source_state.json")
+
+    assert [item.instrument_id for item in summary.processed_instruments] == ["T0100"]
+    assert {item["source_kind"] for item in source_state["raw_sources"]} == {"log"}
+    assert (instrument_dir / "log_operational_records.jsonl").exists()
+    assert not (instrument_dir / "mer_data_records.jsonl").exists()
+
+
 def test_stateful_append_path_appends_only_new_files(tmp_path: Path) -> None:
     input_root = tmp_path / "inputs"
     input_root.mkdir()
@@ -325,6 +346,17 @@ def test_stateless_mode_isolated_and_rejects_existing_manifests(tmp_path: Path) 
         run_normalization_pipeline(
             output_dir=output_root,
             input_files=[log_path],
+        )
+
+
+def test_stateless_mode_rejects_unsupported_explicit_input_files(tmp_path: Path) -> None:
+    unsupported_path = tmp_path / "0100_profile.S61"
+    unsupported_path.write_bytes(b"")
+
+    with pytest.raises(ValueError, match="Unsupported input file type for v1.0.0"):
+        run_normalization_pipeline(
+            output_dir=tmp_path / "output",
+            input_files=[unsupported_path],
         )
 
 

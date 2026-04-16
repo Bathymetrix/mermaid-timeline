@@ -73,7 +73,13 @@ def test_iter_raw_inputs_ignores_non_matching_files(tmp_path: Path) -> None:
     paths = list(iter_raw_inputs(tmp_path))
 
     assert {path.name for path in paths}.isdisjoint(
-        {"0088_68E2D462.C.csv", "0088_68E2D462.C.html"}
+        {
+            "0088_68E2D462.C.csv",
+            "0088_68E2D462.C.html",
+            "0088_68E2D462.S41",
+            "0088_68E2D462.S61",
+            "0088_68E2D462.RBR",
+        }
     )
 
 
@@ -109,6 +115,15 @@ def _build_tree(root: Path) -> None:
     (root / "467.164-T-0102" / "0088_20251005-20h26m10s" / "0088_68E2D462.C.html").write_text(
         "",
         encoding="utf-8",
+    )
+    (root / "467.164-T-0102" / "0088_20251005-20h26m10s" / "0088_68E2D462.S41").write_bytes(
+        b""
+    )
+    (root / "467.164-T-0102" / "0088_20251005-20h26m10s" / "0088_68E2D462.S61").write_bytes(
+        b""
+    )
+    (root / "467.164-T-0102" / "0088_20251005-20h26m10s" / "0088_68E2D462.RBR").write_bytes(
+        b""
     )
     (root / "other" / "nested" / "0100_685864F3.MER").write_bytes(b"")
     (root / "other" / "nested" / "0100_685864F3.LOG").write_text("", encoding="utf-8")

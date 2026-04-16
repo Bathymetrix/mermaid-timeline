@@ -837,7 +837,7 @@ def _kind_for_path(path: Path) -> str:
         return "log"
     if suffix == ".MER":
         return "mer"
-    raise ValueError(f"Unsupported normalization source: {path}")
+    raise ValueError(f"Unsupported input file type for v1.0.0: {path}")
 
 
 def _has_kind(paths: list[Path], kind: str) -> bool:

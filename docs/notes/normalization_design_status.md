@@ -13,6 +13,19 @@ It describes the behavior that downstream callers, fixture audits, and future ha
 - `LOG -> JSONL`
 - `MER -> JSONL`
 
+Supported raw input file types for `v1.0.0` are intentionally limited to:
+
+- `BIN`
+- `LOG`
+- `MER`
+
+Explicitly not supported for `v1.0.0`:
+
+- `S41`
+- `S61`
+- `RBR`
+- other profile or auxiliary formats
+
 Out of scope:
 
 - analysis or timeline interpretation

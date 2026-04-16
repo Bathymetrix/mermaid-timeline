@@ -11,6 +11,17 @@ Current source inputs:
 - `LOG`
 - `MER`
 
+Explicitly not supported in `v1.0.0`:
+
+- `S41`
+- `S61`
+- `RBR`
+- other profile or auxiliary formats
+
+Support for additional file types may be added in future releases. For `v1.0.0`,
+the normalization pipeline is intentionally limited to `BIN`/`LOG`/`MER` to
+ensure correctness and stability.
+
 ## Installation
 
 Use Python 3.12 or newer.
