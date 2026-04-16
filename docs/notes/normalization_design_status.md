@@ -374,6 +374,7 @@ Behavior:
 - rewrite when any previously seen raw source is removed
 - BIN-derived LOG outputs also rewrite when decoder state changes
 - `noop` only when no relevant source or invalidation change is detected
+- `--force-rewrite` overrides incremental planning and forces targeted instrument families to rewrite
 
 Decoder-state invalidation:
 

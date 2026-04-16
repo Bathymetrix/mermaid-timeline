@@ -136,6 +136,7 @@ def run_normalization_pipeline(
     config: Bin2LogConfig | None = None,
     input_files: list[Path] | None = None,
     dry_run: bool = False,
+    force_rewrite: bool = False,
     progress: ProgressCallback | None = None,
 ) -> NormalizationPipelineSummary | DryRunSummary:
     """Run the normalization pipeline in stateful or stateless mode."""
@@ -149,6 +150,7 @@ def run_normalization_pipeline(
             output_dir=output_dir,
             config=config,
             dry_run=dry_run,
+            force_rewrite=force_rewrite,
             progress=progress,
         )
     assert input_files is not None
@@ -157,6 +159,7 @@ def run_normalization_pipeline(
         output_dir=output_dir,
         config=config,
         dry_run=dry_run,
+        force_rewrite=force_rewrite,
         progress=progress,
     )
 
@@ -167,6 +170,7 @@ def _run_stateful(
     output_dir: Path,
     config: Bin2LogConfig | None,
     dry_run: bool,
+    force_rewrite: bool,
     progress: ProgressCallback | None,
 ) -> NormalizationPipelineSummary | DryRunSummary:
     _emit_progress(progress, f"Discovering inputs under {input_root}")
@@ -234,10 +238,12 @@ def _run_stateful(
                 invalidate=_general_invalidation(previous_state, current_state) or (
                     decoder_state_invalidated and _bin_dependent(previous_state, current_state)
                 ),
+                force_rewrite=force_rewrite,
             ),
             mer_action=_determine_action(
                 diff=mer_diff,
                 invalidate=_general_invalidation(previous_state, current_state),
+                force_rewrite=force_rewrite,
             ),
             decoder_state_invalidated=decoder_state_invalidated,
         )
@@ -372,6 +378,7 @@ def _run_stateless(
     output_dir: Path,
     config: Bin2LogConfig | None,
     dry_run: bool,
+    force_rewrite: bool,
     progress: ProgressCallback | None,
 ) -> NormalizationPipelineSummary | DryRunSummary:
     if output_dir_contains_manifests(output_dir):
@@ -424,8 +431,18 @@ def _run_stateless(
             bin_count=_count_kind(current_sources, "bin"),
             log_count=_count_kind(current_sources, "log"),
             mer_count=_count_kind(current_sources, "mer"),
-            log_action="append" if _has_kind(current_sources, "bin") or _has_kind(current_sources, "log") else "noop",
-            mer_action="append" if _has_kind(current_sources, "mer") else "noop",
+            log_action=(
+                "rewrite"
+                if force_rewrite and (_has_kind(current_sources, "bin") or _has_kind(current_sources, "log"))
+                else "append" if _has_kind(current_sources, "bin") or _has_kind(current_sources, "log")
+                else "noop"
+            ),
+            mer_action=(
+                "rewrite"
+                if force_rewrite and _has_kind(current_sources, "mer")
+                else "append" if _has_kind(current_sources, "mer")
+                else "noop"
+            ),
             decoder_state_invalidated=False,
         )
         _accumulate_diff_metrics(metrics, input_file_diffs)
@@ -456,7 +473,7 @@ def _run_stateless(
         mer_paths = _selected_paths(current_sources, {"mer"})
         _execute_log_family(
             instrument_output_dir=instrument_output_dir,
-            action="append",
+            action=summary.log_action,
             log_paths=log_paths,
             bin_paths=bin_paths,
             config=config,
@@ -468,7 +485,7 @@ def _run_stateless(
         )
         _execute_mer_family(
             instrument_output_dir=instrument_output_dir,
-            action="append",
+            action=summary.mer_action,
             mer_paths=mer_paths,
             instrument_id=summary.instrument_id,
             progress=progress,
@@ -906,7 +923,16 @@ def _select_diff_rows(
     }
 
 
-def _determine_action(*, diff: dict[str, list[dict[str, object]]], invalidate: bool) -> str:
+def _determine_action(
+    *,
+    diff: dict[str, list[dict[str, object]]],
+    invalidate: bool,
+    force_rewrite: bool,
+) -> str:
+    if force_rewrite and (diff["added"] or diff["removed"] or diff["changed"] or invalidate):
+        return "rewrite"
+    if force_rewrite:
+        return "rewrite"
     if invalidate:
         return "rewrite"
     if diff["removed"] or diff["changed"]:

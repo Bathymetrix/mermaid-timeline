@@ -170,6 +170,41 @@ def test_normalize_cli_dry_run_json_output(tmp_path: Path, capsys) -> None:
     assert not output_dir.exists()
 
 
+def test_normalize_cli_force_rewrite_reports_rewrite_in_dry_run_json(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    (input_root / "467.174-T-0100.vit").write_text("", encoding="utf-8")
+    (input_root / "0100_sample.LOG").write_text(
+        "1700000000:[MAIN  ,0007]buoy 467.174-T-0100\n",
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "output"
+    result = main(
+        [
+            "normalize",
+            "-i",
+            str(input_root),
+            "-o",
+            str(output_dir),
+            "--dry-run",
+            "--json",
+            "--force-rewrite",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert result == 0
+    assert payload["instruments"][0]["families"]["log"]["action"] == "rewrite"
+    assert payload["instruments"][0]["families"]["mer"]["action"] == "rewrite"
+    assert not output_dir.exists()
+
+
 def test_normalize_cli_verbose_summary_expands_output(tmp_path: Path, capsys) -> None:
     input_root = tmp_path / "inputs"
     input_root.mkdir()

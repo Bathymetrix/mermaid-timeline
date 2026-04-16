@@ -78,6 +78,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Compute the normalization plan and file-level diffs without writing files.",
     )
     normalize.add_argument(
+        "--force-rewrite",
+        action="store_true",
+        help="Rewrite all targeted instrument outputs instead of using append/noop incremental decisions.",
+    )
+    normalize.add_argument(
         "--json",
         action="store_true",
         help="Print dry-run output as structured JSON instead of a human-readable plan.",
@@ -142,6 +147,7 @@ def _handle_normalize(args: argparse.Namespace) -> int:
         config=config,
         input_files=input_files,
         dry_run=args.dry_run,
+        force_rewrite=args.force_rewrite,
         progress=_cli_progress,
     )
     elapsed_s = time.perf_counter() - started

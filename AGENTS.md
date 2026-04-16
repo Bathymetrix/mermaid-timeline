@@ -213,6 +213,7 @@ Avoid:
   - append only when the only change is newly added raw source files
   - rewrite when any previously seen raw source changes or is removed
   - decoder-state changes invalidate only BIN-derived outputs for BIN-dependent floats
+  - explicit force-rewrite mode may override incremental append/noop decisions and force targeted family rewrites
 - JSONL outputs use deterministic processing order, not time-order.
 - Do not mutate existing JSONL outputs in place; append and full rewrite are the only safe modification paths.
 - Future dry-run/report behavior must be completely side-effect free, including no file writes of any kind.

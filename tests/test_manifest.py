@@ -100,6 +100,36 @@ def test_stateful_second_run_with_no_raw_source_changes_is_noop(tmp_path: Path) 
     assert {row["change_kind"] for row in diff_rows} == {"unchanged"}
 
 
+def test_stateful_force_rewrite_rewrites_unchanged_outputs(tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    (input_root / "467.174-T-0100.vit").write_text("", encoding="utf-8")
+    _write_log(input_root / "0100_first.LOG", "first")
+    _write_mer(input_root / "0100_first.MER")
+    output_root = tmp_path / "output"
+
+    run_normalization_pipeline(input_root, output_dir=output_root)
+    summary = run_normalization_pipeline(
+        input_root,
+        output_dir=output_root,
+        force_rewrite=True,
+    )
+
+    instrument_summary = summary.processed_instruments[0]
+    latest = _read_json(output_root / "467.174-T-0100" / "manifests" / "latest.json")
+    diff_rows = _jsonl_lines(
+        output_root / "467.174-T-0100" / "manifests" / "runs" / latest["run_id"] / "input_file_diffs.jsonl"
+    )
+    operational_rows = _jsonl_lines(output_root / "467.174-T-0100" / "log_operational_records.jsonl")
+    event_rows = _jsonl_lines(output_root / "467.174-T-0100" / "mer_event_records.jsonl")
+
+    assert instrument_summary.log_action == "rewrite"
+    assert instrument_summary.mer_action == "rewrite"
+    assert {row["change_kind"] for row in diff_rows} == {"unchanged"}
+    assert [row["message"] for row in operational_rows] == ["first"]
+    assert len(event_rows) == 1
+
+
 def test_stateful_append_path_appends_only_new_mer_files(tmp_path: Path) -> None:
     input_root = tmp_path / "inputs"
     input_root.mkdir()
@@ -267,6 +297,47 @@ def test_stateless_dry_run_is_side_effect_free(tmp_path: Path) -> None:
     assert summary.mode == "stateless"
     assert payload["instruments"][0]["families"]["log"]["action"] == "append"
     assert payload["instruments"][0]["counts"]["new"] == 1
+    assert not output_root.exists()
+
+
+def test_stateless_force_rewrite_replaces_existing_outputs(tmp_path: Path) -> None:
+    first_log = tmp_path / "0100_first.LOG"
+    second_log = tmp_path / "0100_second.LOG"
+    _write_log(first_log, "first")
+    _write_log(second_log, "second")
+    output_root = tmp_path / "output"
+
+    run_normalization_pipeline(output_dir=output_root, input_files=[first_log])
+    summary = run_normalization_pipeline(
+        output_dir=output_root,
+        input_files=[second_log],
+        force_rewrite=True,
+    )
+
+    operational_rows = _jsonl_lines(output_root / "0100" / "log_operational_records.jsonl")
+
+    assert summary.processed_instruments[0].log_action == "rewrite"
+    assert [row["message"] for row in operational_rows] == ["second"]
+
+
+def test_dry_run_force_rewrite_reports_rewrite_actions_without_writing(tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    (input_root / "467.174-T-0100.vit").write_text("", encoding="utf-8")
+    _write_log(input_root / "0100_first.LOG", "first")
+    _write_mer(input_root / "0100_first.MER")
+    output_root = tmp_path / "output"
+
+    summary = run_normalization_pipeline(
+        input_root,
+        output_dir=output_root,
+        dry_run=True,
+        force_rewrite=True,
+    )
+    payload = summary.to_dict()
+
+    assert payload["instruments"][0]["families"]["log"]["action"] == "rewrite"
+    assert payload["instruments"][0]["families"]["mer"]["action"] == "rewrite"
     assert not output_root.exists()
 
 
