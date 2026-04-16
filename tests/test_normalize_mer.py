@@ -8,7 +8,7 @@ from pathlib import Path
 from mermaid_records.normalize_mer import write_mer_jsonl_prototypes
 
 
-def test_write_mer_jsonl_prototypes_preserves_environment_parameter_and_data_rows(
+def test_write_mer_jsonl_prototypes_preserves_environment_parameter_and_event_rows(
     tmp_path: Path,
 ) -> None:
     mer_path = tmp_path / "0100_sample.MER"
@@ -58,11 +58,11 @@ def test_write_mer_jsonl_prototypes_preserves_environment_parameter_and_data_row
 
     environment_records = _read_jsonl(output_dir / "mer_environment_records.jsonl")
     parameter_records = _read_jsonl(output_dir / "mer_parameter_records.jsonl")
-    data_records = _read_jsonl(output_dir / "mer_data_records.jsonl")
+    event_records = _read_jsonl(output_dir / "mer_event_records.jsonl")
 
     assert summary.environment_records == 9
     assert summary.parameter_records == 9
-    assert summary.data_records == 2
+    assert summary.event_records == 2
     assert summary.total_mer_files == 1
     assert summary.zero_event_files == 0
     assert summary.total_event_blocks == 2
@@ -123,8 +123,8 @@ def test_write_mer_jsonl_prototypes_preserves_environment_parameter_and_data_row
         "weight0": "1.0",
     }
 
-    assert data_records[0]["block_index"] == 0
-    assert list(data_records[0]) == [
+    assert event_records[0]["block_index"] == 0
+    assert list(event_records[0]) == [
         "instrument_id",
         "source_file",
         "source_container",
@@ -152,31 +152,31 @@ def test_write_mer_jsonl_prototypes_preserves_environment_parameter_and_data_row
         "raw_info_line",
         "raw_format_line",
     ]
-    assert data_records[0]["date"] == "2024-02-07T22:47:22"
-    assert data_records[0]["fname"] == "2024-02-07T22_47_22.000000"
-    assert data_records[0]["smp_offset"] == "614054"
-    assert data_records[0]["true_fs"] == "40.014107"
-    assert data_records[0]["data_payload_nbytes"] == 3
-    assert data_records[0]["expected_payload_nbytes"] == 19328
-    assert data_records[0]["payload_length_matches_expected"] is False
-    assert data_records[0]["raw_info_line"] == (
+    assert event_records[0]["date"] == "2024-02-07T22:47:22"
+    assert event_records[0]["fname"] == "2024-02-07T22_47_22.000000"
+    assert event_records[0]["smp_offset"] == "614054"
+    assert event_records[0]["true_fs"] == "40.014107"
+    assert event_records[0]["data_payload_nbytes"] == 3
+    assert event_records[0]["expected_payload_nbytes"] == 19328
+    assert event_records[0]["payload_length_matches_expected"] is False
+    assert event_records[0]["raw_info_line"] == (
         '<INFO DATE=2024-02-07T22:47:22 FNAME=2024-02-07T22_47_22.000000 '
         'SMP_OFFSET=614054 TRUE_FS=40.014107 />'
     )
 
-    assert data_records[1]["pressure"] == "1504.00"
-    assert data_records[1]["temperature"] == "-11.0000"
-    assert data_records[1]["criterion"] == "0.0296122"
-    assert data_records[1]["snr"] == "2.556"
-    assert data_records[1]["trig"] == "2000"
-    assert data_records[1]["detrig"] == "5819"
-    assert data_records[1]["length"] == "1024"
-    assert data_records[1]["data_payload_nbytes"] == 4
-    assert data_records[1]["expected_payload_nbytes"] == 4096
-    assert data_records[1]["payload_length_matches_expected"] is False
-    assert "record_time" not in data_records[1]
-    assert "time" not in data_records[1]
-    assert all(record["instrument_id"] == "0100" for record in data_records)
+    assert event_records[1]["pressure"] == "1504.00"
+    assert event_records[1]["temperature"] == "-11.0000"
+    assert event_records[1]["criterion"] == "0.0296122"
+    assert event_records[1]["snr"] == "2.556"
+    assert event_records[1]["trig"] == "2000"
+    assert event_records[1]["detrig"] == "5819"
+    assert event_records[1]["length"] == "1024"
+    assert event_records[1]["data_payload_nbytes"] == 4
+    assert event_records[1]["expected_payload_nbytes"] == 4096
+    assert event_records[1]["payload_length_matches_expected"] is False
+    assert "record_time" not in event_records[1]
+    assert "time" not in event_records[1]
+    assert all(record["instrument_id"] == "0100" for record in event_records)
 
 
 def test_write_mer_jsonl_prototypes_accepts_canonical_instrument_id_override(tmp_path: Path) -> None:
@@ -201,9 +201,9 @@ def test_write_mer_jsonl_prototypes_accepts_canonical_instrument_id_override(tmp
 
     output_dir = tmp_path / "jsonl"
     write_mer_jsonl_prototypes([mer_path], output_dir, instrument_id="T0100")
-    data_records = _read_jsonl(output_dir / "mer_data_records.jsonl")
+    event_records = _read_jsonl(output_dir / "mer_event_records.jsonl")
 
-    assert data_records[0]["instrument_id"] == "T0100"
+    assert event_records[0]["instrument_id"] == "T0100"
 
 
 def test_write_mer_jsonl_prototypes_supports_rounds_info_field(tmp_path: Path) -> None:
@@ -228,9 +228,9 @@ def test_write_mer_jsonl_prototypes_supports_rounds_info_field(tmp_path: Path) -
 
     output_dir = tmp_path / "jsonl"
     write_mer_jsonl_prototypes([mer_path], output_dir)
-    data_records = _read_jsonl(output_dir / "mer_data_records.jsonl")
+    event_records = _read_jsonl(output_dir / "mer_event_records.jsonl")
 
-    assert data_records[0]["rounds"] == "17"
+    assert event_records[0]["rounds"] == "17"
 
 
 def test_write_mer_jsonl_prototypes_supports_stanford_process_parameter(tmp_path: Path) -> None:
@@ -326,7 +326,7 @@ def test_write_mer_jsonl_prototypes_counts_zero_event_files(tmp_path: Path) -> N
     assert summary.total_mer_files == 1
     assert summary.zero_event_files == 1
     assert summary.total_event_blocks == 0
-    assert _read_jsonl(output_dir / "mer_data_records.jsonl") == []
+    assert _read_jsonl(output_dir / "mer_event_records.jsonl") == []
 
 
 def test_write_mer_jsonl_prototypes_excludes_data_framing_bytes_from_payload_length(
@@ -355,11 +355,11 @@ def test_write_mer_jsonl_prototypes_excludes_data_framing_bytes_from_payload_len
 
     output_dir = tmp_path / "jsonl"
     write_mer_jsonl_prototypes([mer_path], output_dir)
-    data_records = _read_jsonl(output_dir / "mer_data_records.jsonl")
+    event_records = _read_jsonl(output_dir / "mer_event_records.jsonl")
 
-    assert data_records[0]["data_payload_nbytes"] == 19328
-    assert data_records[0]["expected_payload_nbytes"] == 19328
-    assert data_records[0]["payload_length_matches_expected"] is True
+    assert event_records[0]["data_payload_nbytes"] == 19328
+    assert event_records[0]["expected_payload_nbytes"] == 19328
+    assert event_records[0]["payload_length_matches_expected"] is True
 
 
 def test_write_mer_jsonl_prototypes_reports_payload_length_mismatch(
@@ -388,11 +388,11 @@ def test_write_mer_jsonl_prototypes_reports_payload_length_mismatch(
 
     output_dir = tmp_path / "jsonl"
     write_mer_jsonl_prototypes([mer_path], output_dir)
-    data_records = _read_jsonl(output_dir / "mer_data_records.jsonl")
+    event_records = _read_jsonl(output_dir / "mer_event_records.jsonl")
 
-    assert data_records[0]["data_payload_nbytes"] == 7
-    assert data_records[0]["expected_payload_nbytes"] == 8
-    assert data_records[0]["payload_length_matches_expected"] is False
+    assert event_records[0]["data_payload_nbytes"] == 7
+    assert event_records[0]["expected_payload_nbytes"] == 8
+    assert event_records[0]["payload_length_matches_expected"] is False
 
 
 def _read_jsonl(path: Path) -> list[dict[str, object]]:

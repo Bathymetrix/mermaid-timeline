@@ -58,7 +58,7 @@ def test_parse_mer_file_extracts_only_payload_bytes_inside_data_framing(tmp_path
     assert len(blocks[0].data_payload) == 19328
 
 
-def test_parse_mer_file_rejects_incomplete_data_block(tmp_path: Path) -> None:
+def test_parse_mer_file_rejects_incomplete_event_block(tmp_path: Path) -> None:
     path = tmp_path / "0100_incomplete.MER"
     path.write_bytes(
         (

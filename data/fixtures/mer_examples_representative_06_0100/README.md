@@ -7,9 +7,9 @@ This subset contains 25 `.MER` files selected from the tracked fixture families:
 
 Selection goals:
 
-- include `.MER` files with zero data blocks
-- include `.MER` files with one or a few data blocks
-- include `.MER` files with many data blocks
+- include `.MER` files with zero event blocks
+- include `.MER` files with one or a few event blocks
+- include `.MER` files with many event blocks
 - include examples with sparse and richer `ENVIRONMENT` sections
 - include both older and newer fixture generations
 

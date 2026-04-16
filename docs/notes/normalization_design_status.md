@@ -121,7 +121,7 @@ Per instrument:
   log_unclassified_records.jsonl
   mer_environment_records.jsonl
   mer_parameter_records.jsonl
-  mer_data_records.jsonl
+  mer_event_records.jsonl
   preflight_status.json
   manifests/
     latest.json
@@ -163,7 +163,7 @@ MER families:
 
 - `mer_environment_records.jsonl`
 - `mer_parameter_records.jsonl`
-- `mer_data_records.jsonl`
+- `mer_event_records.jsonl`
 
 ## JSONL Record Schemas
 
@@ -242,7 +242,7 @@ Shared MER provenance fields:
 - `raw_values`
 - `line`
 
-`mer_data_records.jsonl`
+`mer_event_records.jsonl`
 
 - shared MER provenance fields
 - `block_index`

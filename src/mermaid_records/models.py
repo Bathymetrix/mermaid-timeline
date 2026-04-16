@@ -54,7 +54,7 @@ class MerFileMetadata:
 
 
 @dataclass(slots=True)
-class MerDataBlock:
+class MerEventBlock:
     """Metadata and payload for one <EVENT> block in a .MER file.
 
     Covers parsed fields from <INFO> and <FORMAT>, and the raw binary payload

@@ -112,12 +112,12 @@ def test_stateful_append_path_appends_only_new_mer_files(tmp_path: Path) -> None
     summary = run_normalization_pipeline(input_root, output_dir=output_root)
 
     instrument_summary = summary.processed_instruments[0]
-    data_lines = _jsonl_lines(output_root / "467.174-T-0100" / "mer_data_records.jsonl")
+    event_lines = _jsonl_lines(output_root / "467.174-T-0100" / "mer_event_records.jsonl")
 
     assert instrument_summary.mer_action == "append"
-    assert len(data_lines) == 2
-    assert data_lines[0]["fname"] == "2024-02-07T22_47_22.000000"
-    assert data_lines[1]["fname"] == "2024-02-08T01_02_03.000000"
+    assert len(event_lines) == 2
+    assert event_lines[0]["fname"] == "2024-02-07T22_47_22.000000"
+    assert event_lines[1]["fname"] == "2024-02-08T01_02_03.000000"
 
 
 def test_stateful_rewrite_and_prune_on_changed_or_removed_source(tmp_path: Path) -> None:
@@ -158,18 +158,18 @@ def test_stateful_rewrite_and_prune_on_changed_or_removed_mer_source(tmp_path: P
     run_normalization_pipeline(input_root, output_dir=output_root)
     _write_second_mer(mer_path)
     summary = run_normalization_pipeline(input_root, output_dir=output_root)
-    data_lines_after_change = _jsonl_lines(output_root / "467.174-T-0100" / "mer_data_records.jsonl")
+    event_lines_after_change = _jsonl_lines(output_root / "467.174-T-0100" / "mer_event_records.jsonl")
 
     assert summary.processed_instruments[0].mer_action == "rewrite"
-    assert len(data_lines_after_change) == 1
-    assert data_lines_after_change[0]["fname"] == "2024-02-08T01_02_03.000000"
+    assert len(event_lines_after_change) == 1
+    assert event_lines_after_change[0]["fname"] == "2024-02-08T01_02_03.000000"
 
     mer_path.unlink()
     summary = run_normalization_pipeline(input_root, output_dir=output_root)
     pruned_lines = _jsonl_lines(output_root / "467.174-T-0100" / "state" / "pruned_records.jsonl")
 
     assert summary.processed_instruments[0].mer_action == "rewrite"
-    assert not (output_root / "467.174-T-0100" / "mer_data_records.jsonl").exists()
+    assert not (output_root / "467.174-T-0100" / "mer_event_records.jsonl").exists()
     assert pruned_lines[-1]["source_file"] == mer_path.as_posix()
     assert pruned_lines[-1]["source_kind"] == "mer"
 
@@ -449,10 +449,10 @@ def test_stateful_logs_malformed_mer_blocks_and_continues(tmp_path: Path) -> Non
     latest = _read_json(output_root / "467.174-T-0100" / "manifests" / "latest.json")
     run_dir = output_root / "467.174-T-0100" / "manifests" / "runs" / latest["run_id"]
     malformed_rows = _jsonl_lines(run_dir / "malformed_mer_blocks.jsonl")
-    data_rows = _jsonl_lines(output_root / "467.174-T-0100" / "mer_data_records.jsonl")
+    event_rows = _jsonl_lines(output_root / "467.174-T-0100" / "mer_event_records.jsonl")
 
-    assert len(data_rows) == 1
-    assert data_rows[0]["fname"] == "good.000000"
+    assert len(event_rows) == 1
+    assert event_rows[0]["fname"] == "good.000000"
     assert malformed_rows == [
         {
             "block_index": 0,
@@ -468,7 +468,7 @@ def test_stateful_logs_malformed_mer_blocks_and_continues(tmp_path: Path) -> Non
     assert _jsonl_lines(run_dir / "skipped_mer_files.jsonl") == []
 
 
-def test_stateful_logs_incomplete_mer_data_block_and_continues(tmp_path: Path) -> None:
+def test_stateful_logs_incomplete_mer_event_block_and_continues(tmp_path: Path) -> None:
     input_root = tmp_path / "inputs"
     input_root.mkdir()
     (input_root / "467.174-T-0100.vit").write_text("", encoding="utf-8")
@@ -502,10 +502,10 @@ def test_stateful_logs_incomplete_mer_data_block_and_continues(tmp_path: Path) -
     latest = _read_json(output_root / "467.174-T-0100" / "manifests" / "latest.json")
     run_dir = output_root / "467.174-T-0100" / "manifests" / "runs" / latest["run_id"]
     malformed_rows = _jsonl_lines(run_dir / "malformed_mer_blocks.jsonl")
-    data_rows = _jsonl_lines(output_root / "467.174-T-0100" / "mer_data_records.jsonl")
+    event_rows = _jsonl_lines(output_root / "467.174-T-0100" / "mer_event_records.jsonl")
 
-    assert len(data_rows) == 1
-    assert data_rows[0]["fname"] == "good.000000"
+    assert len(event_rows) == 1
+    assert event_rows[0]["fname"] == "good.000000"
     assert malformed_rows == [
         {
             "block_index": 0,

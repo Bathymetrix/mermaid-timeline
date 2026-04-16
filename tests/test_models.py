@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from mermaid_records.models import (
-    MerDataBlock,
+    MerEventBlock,
     MerFileMetadata,
     OperationalLogEntry,
 )
@@ -30,7 +30,7 @@ def test_dataclasses_can_be_instantiated() -> None:
         pool_size_bytes=2411800,
         source_file=source,
     )
-    block = MerDataBlock(
+    block = MerEventBlock(
         date=datetime(2025, 1, 1, 0, 0, 0),
         pressure_mbar=2000.0,
         temperature_c=33.0,

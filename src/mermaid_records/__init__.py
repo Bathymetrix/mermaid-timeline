@@ -27,11 +27,11 @@ from .discovery import (
     iter_server_mer,
 )
 from .models import (
-    MerDataBlock,
+    MerEventBlock,
     MerFileMetadata,
     OperationalLogEntry,
 )
-from .mer_raw import iter_mer_data_blocks, parse_mer_file
+from .mer_raw import iter_mer_event_blocks, parse_mer_file
 from .normalize_log import LogJsonlPrototypeSummary, write_log_jsonl_prototypes
 from .normalize_mer import MerJsonlPrototypeSummary, write_mer_jsonl_prototypes
 from .normalize_pipeline import (
@@ -42,7 +42,7 @@ from .normalize_pipeline import (
 __all__ = [
     "Bin2LogConfig",
     "Bin2LogError",
-    "MerDataBlock",
+    "MerEventBlock",
     "MerFileMetadata",
     "MerJsonlPrototypeSummary",
     "OperationalLogEntry",
@@ -55,7 +55,7 @@ __all__ = [
     "iter_decoded_log_lines",
     "update_decoder_database",
     "iter_mer_files",
-    "iter_mer_data_blocks",
+    "iter_mer_event_blocks",
     "iter_raw_inputs",
     "iter_server_mer",
     "parse_instrument_name",

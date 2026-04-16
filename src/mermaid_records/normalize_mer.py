@@ -17,7 +17,7 @@ from .parse_instrument_name import maybe_parse_instrument_name
 OUTPUT_FILENAMES = {
     "environment": "mer_environment_records.jsonl",
     "parameter": "mer_parameter_records.jsonl",
-    "data": "mer_data_records.jsonl",
+    "event": "mer_event_records.jsonl",
 }
 
 _ATTR_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_\[\]]*)=([^\s>]+)")
@@ -78,7 +78,7 @@ class MerJsonlPrototypeSummary:
 
     environment_records: int
     parameter_records: int
-    data_records: int
+    event_records: int
     environment_kind_counts: dict[str, int]
     parameter_kind_counts: dict[str, int]
     total_mer_files: int
@@ -92,8 +92,8 @@ class MerJsonlPrototypeSummary:
     example_drift_environment: dict[str, object] | None
     example_adc_parameter: dict[str, object] | None
     example_model_parameter: dict[str, object] | None
-    example_data_with_fname: dict[str, object] | None
-    example_data_with_trigger_fields: dict[str, object] | None
+    example_event_with_fname: dict[str, object] | None
+    example_event_with_trigger_fields: dict[str, object] | None
 
 
 def _common_mer_record_fields(instrument_id: str, path: Path) -> dict[str, object]:
@@ -124,7 +124,7 @@ def write_mer_jsonl_prototypes(
 
     environment_count = 0
     parameter_count = 0
-    data_count = 0
+    event_count = 0
     environment_kind_counter: Counter[str] = Counter()
     parameter_kind_counter: Counter[str] = Counter()
     total_mer_files = 0
@@ -137,13 +137,13 @@ def write_mer_jsonl_prototypes(
     example_drift_environment: dict[str, object] | None = None
     example_adc_parameter: dict[str, object] | None = None
     example_model_parameter: dict[str, object] | None = None
-    example_data_with_fname: dict[str, object] | None = None
-    example_data_with_trigger_fields: dict[str, object] | None = None
+    example_event_with_fname: dict[str, object] | None = None
+    example_event_with_trigger_fields: dict[str, object] | None = None
 
     with (
         output_paths["environment"].open("w", encoding="utf-8") as environment_handle,
         output_paths["parameter"].open("w", encoding="utf-8") as parameter_handle,
-        output_paths["data"].open("w", encoding="utf-8") as data_handle,
+        output_paths["event"].open("w", encoding="utf-8") as event_handle,
     ):
         for path in sorted(Path(path) for path in mer_paths):
             try:
@@ -224,7 +224,7 @@ def write_mer_jsonl_prototypes(
 
                 for block_index, block in enumerate(blocks):
                     record, block_unknown_info_keys, block_unknown_format_keys = (
-                        _build_data_record(
+                        _build_event_record(
                             instrument_id=path_instrument_id,
                             path=path,
                             block_index=block_index,
@@ -235,15 +235,15 @@ def write_mer_jsonl_prototypes(
                     )
                     file_unknown_info_keys.update(block_unknown_info_keys)
                     file_unknown_format_keys.update(block_unknown_format_keys)
-                    _write_jsonl_line(data_handle, record)
-                    data_count += 1
-                    if example_data_with_fname is None and record["fname"] is not None:
-                        example_data_with_fname = record
+                    _write_jsonl_line(event_handle, record)
+                    event_count += 1
+                    if example_event_with_fname is None and record["fname"] is not None:
+                        example_event_with_fname = record
                     if (
-                        example_data_with_trigger_fields is None
+                        example_event_with_trigger_fields is None
                         and record["pressure"] is not None
                     ):
-                        example_data_with_trigger_fields = record
+                        example_event_with_trigger_fields = record
 
                 if file_unknown_info_keys or file_unknown_format_keys:
                     unknown_info_keys.update(file_unknown_info_keys)
@@ -273,12 +273,12 @@ def write_mer_jsonl_prototypes(
     return MerJsonlPrototypeSummary(
         environment_records=environment_count,
         parameter_records=parameter_count,
-        data_records=data_count,
+        event_records=event_count,
         environment_kind_counts=dict(environment_kind_counter),
         parameter_kind_counts=dict(parameter_kind_counter),
         total_mer_files=total_mer_files,
         zero_event_files=zero_event_files,
-        total_event_blocks=data_count,
+        total_event_blocks=event_count,
         unknown_environment_tags=sorted(unknown_environment_tags),
         unknown_parameter_tags=sorted(unknown_parameter_tags),
         unknown_info_keys=sorted(unknown_info_keys),
@@ -287,8 +287,8 @@ def write_mer_jsonl_prototypes(
         example_drift_environment=example_drift_environment,
         example_adc_parameter=example_adc_parameter,
         example_model_parameter=example_model_parameter,
-        example_data_with_fname=example_data_with_fname,
-        example_data_with_trigger_fields=example_data_with_trigger_fields,
+        example_event_with_fname=example_event_with_fname,
+        example_event_with_trigger_fields=example_event_with_trigger_fields,
     )
 
 
@@ -337,7 +337,7 @@ def _build_parameter_record(
     )
 
 
-def _build_data_record(
+def _build_event_record(
     *,
     instrument_id: str,
     path: Path,

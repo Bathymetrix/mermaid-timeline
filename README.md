@@ -154,7 +154,7 @@ The `normalize` command writes:
 - per-instrument MER JSONL outputs:
   - `mer_environment_records.jsonl`
   - `mer_parameter_records.jsonl`
-  - `mer_data_records.jsonl`
+  - `mer_event_records.jsonl`
 - per-instrument `manifests/` in stateful mode
 - per-run `manifests/runs/<run_id>/input_file_diffs.jsonl` in stateful mode
 - per-instrument `state/` for pruning records in stateful mode

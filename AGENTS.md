@@ -99,7 +99,7 @@ Normalized record-family direction to keep in mind during cleanup and naming:
 - `transmission_records`
 - `acquisition_records`
 - `ascent_request_records`
-- `mer_data_blocks`
+- `mer_event_blocks`
 - `acquisition_intervals`
 - `measurement_records`
 - `gps_records`
@@ -135,7 +135,7 @@ Ignore lines like:
 Parse `.MER` files into:
 
 - one `MerFileMetadata`
-- zero or more `MerDataBlock` values
+- zero or more `MerEventBlock` values
 
 For metadata:
 
@@ -155,7 +155,7 @@ For event blocks:
 - The primary shared LOG parser module is `src/mermaid_records/operational_raw.py`.
 - Discovery should cover only raw `BIN`, `LOG`, and `MER` inputs relevant to this package.
 - `LOG` is the native per-dive operational source.
-- A single `.MER` may include DET data from the current dive plus REG/REQ data from previous dives. Do not infer dive membership from `MerDataBlock.date` during parsing.
+- A single `.MER` may include DET data from the current dive plus REG/REQ data from previous dives. Do not infer dive membership from `MerEventBlock.date` during parsing.
 
 ## Current Fixtures
 

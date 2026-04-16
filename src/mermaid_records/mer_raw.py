@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 from typing import Callable, Iterator
 
-from .models import MerDataBlock, MerFileMetadata
+from .models import MerEventBlock, MerFileMetadata
 
 _SECTION_RE = re.compile(
     rb"<(?P<name>ENVIRONMENT|PARAMETERS)>(?P<body>.*?)</(?P=name)>",
@@ -28,12 +28,12 @@ _DATA_TRAILING_FRAME = b"\n\r\t"
 type MalformedMerBlockCallback = Callable[[int | None, str, str, str], None]
 
 
-def parse_mer_file(path: Path) -> tuple[MerFileMetadata, list[MerDataBlock]]:
-    """Parse a .MER file into conservative file metadata and raw data blocks."""
+def parse_mer_file(path: Path) -> tuple[MerFileMetadata, list[MerEventBlock]]:
+    """Parse a .MER file into conservative file metadata and raw event blocks."""
 
     data = path.read_bytes()
     metadata = _parse_metadata(path, data)
-    blocks = list(iter_mer_data_blocks(path, data))
+    blocks = list(iter_mer_event_blocks(path, data))
     return metadata, blocks
 
 
@@ -41,7 +41,7 @@ def parse_mer_file_recoverable(
     path: Path,
     *,
     on_malformed_block: MalformedMerBlockCallback | None = None,
-) -> tuple[MerFileMetadata, list[MerDataBlock]]:
+) -> tuple[MerFileMetadata, list[MerEventBlock]]:
     """Parse a .MER file with recoverable malformed-structure callbacks."""
 
     data = path.read_bytes()
@@ -51,7 +51,7 @@ def parse_mer_file_recoverable(
         on_malformed_block=on_malformed_block,
     )
     blocks = list(
-        iter_mer_data_blocks_recoverable(
+        iter_mer_event_blocks_recoverable(
             path,
             data,
             on_malformed_block=on_malformed_block,
@@ -69,8 +69,8 @@ def parse_mer_file_recoverable(
     return metadata, blocks
 
 
-def iter_mer_data_blocks(path: Path, data: bytes | None = None) -> Iterator[MerDataBlock]:
-    """Yield conservative MER data blocks without interpreting waveform payloads."""
+def iter_mer_event_blocks(path: Path, data: bytes | None = None) -> Iterator[MerEventBlock]:
+    """Yield conservative MER event blocks without interpreting waveform payloads."""
 
     raw_data = data if data is not None else path.read_bytes()
     for event_match in _EVENT_RE.finditer(raw_data):
@@ -82,7 +82,7 @@ def iter_mer_data_blocks(path: Path, data: bytes | None = None) -> Iterator[MerD
         info_attrs = _parse_attributes(info_line)
         format_attrs = _parse_attributes(format_line)
 
-        yield MerDataBlock(
+        yield MerEventBlock(
             date=_parse_datetime(info_attrs.get("DATE")),
             pressure_mbar=_parse_float(info_attrs.get("PRESSURE")),
             temperature_c=_parse_float(info_attrs.get("TEMPERATURE")),
@@ -103,13 +103,13 @@ def iter_mer_data_blocks(path: Path, data: bytes | None = None) -> Iterator[MerD
         )
 
 
-def iter_mer_data_blocks_recoverable(
+def iter_mer_event_blocks_recoverable(
     path: Path,
     data: bytes | None = None,
     *,
     on_malformed_block: MalformedMerBlockCallback | None = None,
-) -> Iterator[MerDataBlock]:
-    """Yield conservative MER data blocks while reporting malformed structure."""
+) -> Iterator[MerEventBlock]:
+    """Yield conservative MER event blocks while reporting malformed structure."""
 
     raw_data = data if data is not None else path.read_bytes()
     event_matches = list(_EVENT_RE.finditer(raw_data))
@@ -193,7 +193,7 @@ def iter_mer_data_blocks_recoverable(
             )
             continue
 
-        yield MerDataBlock(
+        yield MerEventBlock(
             date=date,
             pressure_mbar=pressure_mbar,
             temperature_c=temperature_c,
@@ -224,10 +224,10 @@ def iter_mer_data_blocks_recoverable(
         )
 
 
-def iter_mer_records(path: Path) -> Iterator[MerDataBlock]:
-    """Backward-compatible alias for iterating parsed MER data blocks."""
+def iter_mer_records(path: Path) -> Iterator[MerEventBlock]:
+    """Yield parsed MER event blocks."""
 
-    yield from iter_mer_data_blocks(path)
+    yield from iter_mer_event_blocks(path)
 
 
 def _parse_metadata(path: Path, data: bytes) -> MerFileMetadata:
