@@ -521,6 +521,7 @@ def test_stateful_logs_malformed_log_lines_and_continues(tmp_path: Path) -> None
     operational_rows = _jsonl_lines(output_root / "467.174-T-0100" / "log_operational_records.jsonl")
 
     assert [row["message"] for row in operational_rows] == ["first", "second"]
+    assert [row["source_file"] for row in operational_rows] == ["0100_malformed.LOG", "0100_malformed.LOG"]
     assert malformed_rows == [
         {
             "error": "line does not match expected LOG pattern",

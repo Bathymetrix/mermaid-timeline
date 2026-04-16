@@ -121,6 +121,10 @@ For ascent-request prototypes, classify only explicit request outcomes such as `
 
 For GPS prototypes, emit one record per clearly GPS-related LOG line such as `GPS fix...`, raw latitude/longitude lines, `hdop`/`vdop`, `GPSACK`, and `GPSOFF`. Do not group lines into fixes or compute derived position/timing values in the normalization layer.
 
+For rollover banner lines like `timestamp:*** switching to 0026/5D4A3E75 ***`, preserve them as operational LOG records instead of malformed lines and emit `switched_to_log_file` with canonical filename normalization.
+
+Whenever LOG content is parsed as a LOG or MER filename reference, canonicalize only that parsed filename by replacing `/` with `_`. If the context implies a LOG rollover target, emit the canonical `.LOG` filename form.
+
 For generated JSONL filenames, prefix LOG-derived outputs with `log_` and reserve analogous `mer_` prefixes for MER-derived outputs.
 
 Acquisition windows may be extracted only from explicit:
@@ -221,6 +225,7 @@ Avoid:
   - decoder-state changes invalidate only BIN-derived outputs for BIN-dependent floats
   - explicit force-rewrite mode may override incremental append/noop decisions and force targeted family rewrites
 - JSONL outputs use deterministic processing order, not time-order.
+- Normalized JSONL outputs should use basename-only `source_file`; richer full-path provenance belongs in manifests and other run-side artifacts.
 - Do not mutate existing JSONL outputs in place; append and full rewrite are the only safe modification paths.
 - Future dry-run/report behavior must be completely side-effect free, including no file writes of any kind.
 - Persisted `manifests/runs/<run_id>/input_file_diffs.jsonl` is a strict raw input diff log: file-level fields only, no append/rewrite/noop semantics, and no standalone non-file invalidation records.

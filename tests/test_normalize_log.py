@@ -88,18 +88,21 @@ def test_write_log_jsonl_prototypes_preserves_unclassified_records(
     ]
     assert operational_records[0]["record_time"] == "2023-11-14T22:13:20"
     assert operational_records[0]["log_epoch_time"] == "1700000000"
+    assert operational_records[0]["source_file"] == log_path.name
     assert "time" not in operational_records[0]
 
-    assert transmission_records[1]["referenced_artifact"] == "0100/AAAA0001.MER"
+    assert transmission_records[1]["referenced_artifact"] == "0100_AAAA0001.MER"
     assert transmission_records[1]["rate_bytes_per_s"] == 83
     assert transmission_records[1]["record_time"] == "2023-11-14T22:13:21"
     assert transmission_records[1]["log_epoch_time"] == "1700000001"
+    assert transmission_records[1]["source_file"] == log_path.name
     assert "time" not in transmission_records[1]
 
     assert measurement_records[0]["measurement_kind"] == "pressure_temperature"
     assert measurement_records[1]["measurement_kind"] == "pump_duration"
     assert measurement_records[0]["record_time"] == "2023-11-14T22:13:22"
     assert measurement_records[0]["log_epoch_time"] == "1700000002"
+    assert measurement_records[0]["source_file"] == log_path.name
     assert "time" not in measurement_records[0]
 
     assert all(
@@ -317,7 +320,7 @@ def test_write_log_jsonl_prototypes_groups_parameter_block_into_one_episode(
 
     assert parameter_records[0] == {
         "instrument_id": "0100",
-        "source_file": log_path.as_posix(),
+        "source_file": log_path.name,
         "episode_index": 0,
         "line_start_index": 2,
         "line_end_index": 5,
@@ -369,8 +372,8 @@ def test_write_log_jsonl_prototypes_stops_parameter_episode_at_explicit_boundari
     parameter_records = _read_jsonl(output_dir / "log_parameter_records.jsonl")
     operational_records = _read_jsonl(output_dir / "log_operational_records.jsonl")
 
-    assert summary.total_records == 6
-    assert summary.operational_records == 3
+    assert summary.total_records == 7
+    assert summary.operational_records == 4
     assert summary.parameter_records == 3
     assert [record["episode_index"] for record in parameter_records] == [0, 1, 2]
     assert [record["line_start_index"] for record in parameter_records] == [2, 5, 8]
@@ -392,17 +395,13 @@ def test_write_log_jsonl_prototypes_stops_parameter_episode_at_explicit_boundari
     assert [record["message"] for record in operational_records] == [
         "internal pressure 85448Pa",
         "<WARN>timeout",
+        "*** switching to 0100/NEXT.LOG ***",
         "buoy 467.174-T-0100",
     ]
+    rollover_record = operational_records[2]
+    assert rollover_record["switched_to_log_file"] == "0100_NEXT.LOG"
+    assert rollover_record["source_file"] == log_path.name
     assert malformed_log_lines == [
-        {
-            "run_id": "run-2",
-            "instrument_id": "0100",
-            "source_file": log_path.as_posix(),
-            "line_number": 7,
-            "raw_line": "1700000004:*** switching to 0100/NEXT.LOG ***",
-            "error": "line does not match expected LOG pattern",
-        },
         {
             "run_id": "run-2",
             "instrument_id": "0100",
@@ -495,7 +494,7 @@ def test_write_log_jsonl_prototypes_groups_testmode_fixture_session_from_0100_ex
     assert len(testmode_records) == 1
     assert summary.sbe_records >= 1
     assert testmode_records[0]["instrument_id"] == "0100"
-    assert testmode_records[0]["source_file"] == log_path.as_posix()
+    assert testmode_records[0]["source_file"] == log_path.name
     assert testmode_records[0]["episode_index"] == 0
     assert testmode_records[0]["start_log_epoch_time"] == "1683036460"
     assert testmode_records[0]["end_log_epoch_time"] == "1683036824"
@@ -532,7 +531,7 @@ def test_write_log_jsonl_prototypes_groups_sbe_and_profil_fixture_blocks_from_01
     assert summary.parameter_records == 0
     assert parameter_records == []
     assert sbe_records[0]["instrument_id"] == "0100"
-    assert sbe_records[0]["source_file"] == log_path.as_posix()
+    assert sbe_records[0]["source_file"] == log_path.name
     assert sbe_records[0]["episode_index"] == 0
     assert sbe_records[0]["start_log_epoch_time"] == "1687246390"
     assert sbe_records[0]["end_log_epoch_time"] == "1687246390"

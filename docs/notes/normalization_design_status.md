@@ -190,6 +190,7 @@ MER families:
 
 `log_operational_records.jsonl`
 
+- `source_file` is basename-only in normalized JSONL outputs
 - `record_time`
 - `log_epoch_time`
 - `instrument_id`
@@ -201,6 +202,7 @@ MER families:
 - `raw_line`
 - `severity`
 - `message_kind`
+- `switched_to_log_file` (only for parsed rollover banner rows such as `*** switching to ... ***`)
 
 `log_acquisition_records.jsonl`
 
@@ -265,7 +267,7 @@ MER families:
 
 - all operational provenance/source fields
 - `transmission_kind`
-- `referenced_artifact`
+- `referenced_artifact` (`/` normalized to `_` when the LOG text is parsed as a LOG/MER filename reference)
 - `rate_bytes_per_s`
 
 `log_measurement_records.jsonl`
@@ -286,7 +288,7 @@ Shared MER provenance fields:
 
 - `instrument_id`
 - `source_container`
-- `source_file`
+- `source_file` (basename only in normalized JSONL outputs; full paths remain in manifest/run artifacts)
 
 `mer_environment_records.jsonl`
 

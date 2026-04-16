@@ -108,11 +108,13 @@ def test_write_mer_jsonl_prototypes_preserves_environment_parameter_and_event_ro
         record for record in environment_records if record["environment_kind"] == "drift"
     )
     assert drift_record["raw_values"] == {"sec": "-1", "usec": "-108856"}
+    assert gpsinfo_record["source_file"] == mer_path.name
 
     adc_record = next(
         record for record in parameter_records if record["parameter_kind"] == "adc"
     )
     assert adc_record["raw_values"] == {"buffer": "ON", "gain": "1"}
+    assert adc_record["source_file"] == mer_path.name
 
     model_record = next(
         record for record in parameter_records if record["parameter_kind"] == "model"
@@ -177,6 +179,7 @@ def test_write_mer_jsonl_prototypes_preserves_environment_parameter_and_event_ro
     assert "record_time" not in event_records[1]
     assert "time" not in event_records[1]
     assert all(record["instrument_id"] == "0100" for record in event_records)
+    assert all(record["source_file"] == mer_path.name for record in event_records)
 
 
 def test_write_mer_jsonl_prototypes_accepts_canonical_instrument_id_override(tmp_path: Path) -> None:

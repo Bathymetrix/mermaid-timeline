@@ -28,7 +28,7 @@ def begin_instrument_run(
     """Create manifest context for one instrument-level stateful run."""
 
     started_at = _iso_now()
-    run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
+    run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     manifests_root = instrument_output_dir / "manifests"
     run_dir = manifests_root / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)

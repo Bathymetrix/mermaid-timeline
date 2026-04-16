@@ -30,6 +30,10 @@ OUTPUT_FILENAMES = {
 
 _LOG_LINE_RE = re.compile(r"^(?P<time>.+?):\[(?P<tag>[^\]]+)\](?P<message>.*)$")
 _TIMESTAMPED_LINE_RE = re.compile(r"^(?P<time>.+?):(?P<content>.*)$")
+_ROLLOVER_BANNER_RE = re.compile(
+    r"^\*\*\*\s+switching to\s+(?P<target>.+?)\s+\*\*\*$",
+    re.IGNORECASE,
+)
 _PARAMETER_PREFIX_RE = re.compile(
     r"^\s*(?:"
     r"bypass(?:\s|$)|"
@@ -132,7 +136,7 @@ def _common_log_record_fields(
 
     return {
         "instrument_id": instrument_id,
-        "source_file": entry.source_file.as_posix(),
+        "source_file": entry.source_file.name,
         "source_container": "log",
         "record_time": entry.time.isoformat(),
         "log_epoch_time": _log_epoch_time(entry),
@@ -240,8 +244,10 @@ def write_log_jsonl_prototypes(
                             has_measurement=measurement_record is not None,
                         )
                         common_fields = _common_log_record_fields(entry, instrument_id=path_instrument_id)
+                        rollover_fields = _rollover_fields(entry)
                         operational_record = {
                             **common_fields,
+                            **rollover_fields,
                             "severity": severity,
                             "message_kind": message_kind,
                             "raw_line": entry.raw_line,
@@ -302,6 +308,7 @@ def write_log_jsonl_prototypes(
                         if not classified:
                             unclassified_record = {
                                 **common_fields,
+                                **rollover_fields,
                                 "severity": severity,
                                 "unclassified_reason": "no_family_match",
                                 "raw_line": entry.raw_line,
@@ -518,6 +525,10 @@ def _iter_log_source_units(
             episode = _flush_episode()
             if episode is not None:
                 yield episode
+            rollover_entry = _parse_rollover_banner(path=path, line=line)
+            if rollover_entry is not None:
+                yield rollover_entry
+                continue
             _report_malformed_line(
                 on_malformed_line,
                 line_number=line_number,
@@ -597,7 +608,7 @@ def _build_grouped_episode_record(
     last_line = timestamped_lines[-1]
     return {
         "instrument_id": instrument_id,
-        "source_file": source_file.as_posix(),
+        "source_file": source_file.name,
         "episode_index": episode.episode_index,
         "line_start_index": first_line.line_number,
         "line_end_index": last_line.line_number,
@@ -816,7 +827,9 @@ def _classify_transmission(
     return {
         **_common_log_record_fields(entry, instrument_id=instrument_id),
         "transmission_kind": "upload_artifact",
-        "referenced_artifact": uploaded_match.group("artifact"),
+        "referenced_artifact": _normalize_parsed_artifact_reference(
+            uploaded_match.group("artifact")
+        ),
         "rate_bytes_per_s": int(uploaded_match.group("rate")),
         "raw_line": entry.raw_line,
     }
@@ -891,6 +904,48 @@ def _fallback_instrument_id(path: Path) -> str:
         if parsed is not None:
             return parsed.instrument_id
     return path.stem.split("_", maxsplit=1)[0]
+
+
+def _parse_rollover_banner(*, path: Path, line: str) -> OperationalLogEntry | None:
+    match = _TIMESTAMPED_LINE_RE.match(line)
+    if match is None:
+        return None
+    content = match.group("content")
+    banner_match = _ROLLOVER_BANNER_RE.match(content)
+    if banner_match is None:
+        return None
+    return OperationalLogEntry(
+        time=_parse_time_text(match.group("time")),
+        subsystem="ROLLOVER",
+        code=None,
+        message=content,
+        source_kind="log",
+        raw_line=line,
+        source_file=path,
+    )
+
+
+def _rollover_fields(entry: OperationalLogEntry) -> dict[str, object]:
+    banner_match = _ROLLOVER_BANNER_RE.match(entry.message)
+    if banner_match is None:
+        return {}
+    return {
+        "switched_to_log_file": _normalize_parsed_artifact_reference(
+            banner_match.group("target"),
+            default_suffix=".LOG",
+        )
+    }
+
+
+def _normalize_parsed_artifact_reference(
+    reference: str,
+    *,
+    default_suffix: str | None = None,
+) -> str:
+    normalized = reference.replace("/", "_")
+    if default_suffix is not None and "." not in Path(normalized).name:
+        normalized = f"{normalized}{default_suffix}"
+    return normalized
 
 
 def _log_epoch_time(entry: OperationalLogEntry) -> str:

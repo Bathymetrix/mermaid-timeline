@@ -101,7 +101,7 @@ def _common_mer_record_fields(instrument_id: str, path: Path) -> dict[str, objec
 
     return {
         "instrument_id": instrument_id,
-        "source_file": path.as_posix(),
+        "source_file": path.name,
         "source_container": "mer",
     }
 
