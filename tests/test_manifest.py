@@ -396,7 +396,7 @@ def test_stateful_records_skipped_log_files(tmp_path: Path, monkeypatch: pytest.
         raise OSError("simulated unreadable log")
         yield  # pragma: no cover
 
-    monkeypatch.setattr(normalize_log_module, "iter_operational_log_entries", _raise_unreadable)
+    monkeypatch.setattr(normalize_log_module, "_iter_log_source_units", _raise_unreadable)
 
     output_root = tmp_path / "output"
     run_normalization_pipeline(input_root, output_dir=output_root)

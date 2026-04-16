@@ -116,6 +116,7 @@ Per instrument:
   log_acquisition_records.jsonl
   log_ascent_request_records.jsonl
   log_gps_records.jsonl
+  log_parameter_records.jsonl
   log_transmission_records.jsonl
   log_measurement_records.jsonl
   log_unclassified_records.jsonl
@@ -155,6 +156,7 @@ LOG families:
 - `log_acquisition_records.jsonl`
 - `log_ascent_request_records.jsonl`
 - `log_gps_records.jsonl`
+- `log_parameter_records.jsonl`
 - `log_transmission_records.jsonl`
 - `log_measurement_records.jsonl`
 - `log_unclassified_records.jsonl`
@@ -199,6 +201,20 @@ MER families:
 - all operational provenance/source fields
 - `gps_record_kind`
 - `raw_values`
+
+`log_parameter_records.jsonl`
+
+- grouped startup/dive-parameter episodes preserved from LOG continuation lines
+- `instrument_id`
+- `source_file`
+- `episode_index`
+- `line_start_index`
+- `line_end_index`
+- `start_record_time`
+- `end_record_time`
+- `start_log_epoch_time`
+- `end_log_epoch_time`
+- `raw_lines`
 
 `log_transmission_records.jsonl`
 

@@ -13,7 +13,6 @@ import re
 from typing import Iterable
 
 from .models import OperationalLogEntry
-from .operational_raw import iter_operational_log_entries
 from .parse_instrument_name import maybe_parse_instrument_name
 
 OUTPUT_FILENAMES = {
@@ -21,10 +20,35 @@ OUTPUT_FILENAMES = {
     "acquisition": "log_acquisition_records.jsonl",
     "ascent_request": "log_ascent_request_records.jsonl",
     "gps": "log_gps_records.jsonl",
+    "parameter": "log_parameter_records.jsonl",
     "transmission": "log_transmission_records.jsonl",
     "measurement": "log_measurement_records.jsonl",
     "unclassified": "log_unclassified_records.jsonl",
 }
+
+_LOG_LINE_RE = re.compile(r"^(?P<time>.+?):\[(?P<tag>[^\]]+)\](?P<message>.*)$")
+_TIMESTAMPED_LINE_RE = re.compile(r"^(?P<time>.+?):(?P<content>.*)$")
+_PARAMETER_PREFIX_RE = re.compile(
+    r"^\s*(?:"
+    r"bypass(?:\s|$)|"
+    r"valve(?:\s|$)|"
+    r"pump(?:\s|$)|"
+    r"rate(?:\s|$)|"
+    r"surface(?:\s|$)|"
+    r"near(?:\s|$)|"
+    r"far(?:\s|$)|"
+    r"ascent(?:\s|$)|"
+    r"dead(?:\s|$)|"
+    r"coeff(?:\s|$)|"
+    r"stab(?:\s|$)|"
+    r"delay(?:\s|$)|"
+    r"mmtime(?:\s|$)|"
+    r"p2t37:|"
+    r"stage\[0\](?:\s|$)|"
+    r"stage\[1\](?:\s|$)"
+    r")",
+    re.IGNORECASE,
+)
 
 _UPLOADED_ARTIFACT_RE = re.compile(r'"(?P<artifact>[^"]+)" uploaded at (?P<rate>\d+)bytes/s')
 _P_T_S_RE = re.compile(r"\bP\s*[+-]?\d+,\s*T\s*[+-]?\d+,\s*S\s*[+-]?\d+\b")
@@ -60,6 +84,7 @@ class LogJsonlPrototypeSummary:
     acquisition_records: int
     ascent_request_records: int
     gps_records: int
+    parameter_records: int
     transmission_records: int
     measurement_records: int
     unclassified_records: int
@@ -70,10 +95,25 @@ class LogJsonlPrototypeSummary:
     ascent_request_examples: dict[str, dict[str, object]]
     gps_record_kind_counts: dict[str, int]
     gps_examples: dict[str, dict[str, object]]
+    parameter_examples: list[dict[str, object]]
     transmission_examples: list[dict[str, object]]
     measurement_examples: list[dict[str, object]]
     unclassified_examples: list[dict[str, object]]
     common_unclassified_patterns: list[dict[str, object]]
+
+
+@dataclass(slots=True)
+class _ParameterEpisodeLine:
+    line_number: int
+    raw_line: str
+    time: datetime
+    log_epoch_time: str
+
+
+@dataclass(slots=True)
+class _LogParameterEpisode:
+    episode_index: int
+    lines: list[_ParameterEpisodeLine]
 
 
 def _common_log_record_fields(
@@ -116,6 +156,7 @@ def write_log_jsonl_prototypes(
     acquisition_count = 0
     ascent_request_count = 0
     gps_count = 0
+    parameter_count = 0
     transmission_count = 0
     measurement_count = 0
     unclassified_count = 0
@@ -126,6 +167,7 @@ def write_log_jsonl_prototypes(
     ascent_request_examples: dict[str, dict[str, object]] = {}
     gps_record_kind_counter: Counter[str] = Counter()
     gps_examples: dict[str, dict[str, object]] = {}
+    parameter_examples: list[dict[str, object]] = []
     transmission_examples: list[dict[str, object]] = []
     measurement_examples: list[dict[str, object]] = []
     unclassified_examples: list[dict[str, object]] = []
@@ -138,6 +180,7 @@ def write_log_jsonl_prototypes(
         output_paths["acquisition"].open("w", encoding="utf-8") as acquisition_handle,
         output_paths["ascent_request"].open("w", encoding="utf-8") as ascent_request_handle,
         output_paths["gps"].open("w", encoding="utf-8") as gps_handle,
+        output_paths["parameter"].open("w", encoding="utf-8") as parameter_handle,
         output_paths["transmission"].open("w", encoding="utf-8") as transmission_handle,
         output_paths["measurement"].open("w", encoding="utf-8") as measurement_handle,
         output_paths["unclassified"].open("w", encoding="utf-8") as unclassified_handle,
@@ -162,102 +205,113 @@ def write_log_jsonl_prototypes(
                     }
                 )
             try:
-                for entry in iter_operational_log_entries(
+                for item in _iter_log_source_units(
                     path,
                     on_malformed_line=_record_malformed_line,
                 ):
-                    if entry.source_kind != "log":
+                    if isinstance(item, OperationalLogEntry):
+                        total_records += 1
+                        entry = item
+                        acquisition_record = _classify_acquisition(entry, instrument_id=path_instrument_id)
+                        ascent_request_record = _classify_ascent_request(entry, instrument_id=path_instrument_id)
+                        gps_record = _classify_gps(entry, instrument_id=path_instrument_id)
+                        transmission_record = _classify_transmission(entry, instrument_id=path_instrument_id)
+                        measurement_record = _classify_measurement(entry, instrument_id=path_instrument_id)
+                        severity = _severity(entry.message)
+                        message_kind = _message_kind(
+                            entry,
+                            has_acquisition=acquisition_record is not None,
+                            has_ascent_request=ascent_request_record is not None,
+                            has_gps=gps_record is not None,
+                            has_transmission=transmission_record is not None,
+                            has_measurement=measurement_record is not None,
+                        )
+                        common_fields = _common_log_record_fields(entry, instrument_id=path_instrument_id)
+                        operational_record = {
+                            **common_fields,
+                            "severity": severity,
+                            "message_kind": message_kind,
+                            "raw_line": entry.raw_line,
+                        }
+                        _write_jsonl_line(operational_handle, operational_record)
+                        operational_count += 1
+
+                        classified = False
+                        if acquisition_record is not None:
+                            _write_jsonl_line(acquisition_handle, acquisition_record)
+                            acquisition_count += 1
+                            classified = True
+                            acquisition_state_counter[
+                                acquisition_record["acquisition_state"]
+                            ] += 1
+                            acquisition_evidence_kind_counter[
+                                acquisition_record["acquisition_evidence_kind"]
+                            ] += 1
+                            example_key = (
+                                f"{acquisition_record['acquisition_state']}:"
+                                f"{acquisition_record['acquisition_evidence_kind']}"
+                            )
+                            acquisition_examples.setdefault(example_key, acquisition_record)
+
+                        if ascent_request_record is not None:
+                            _write_jsonl_line(ascent_request_handle, ascent_request_record)
+                            ascent_request_count += 1
+                            classified = True
+                            ascent_request_state_counter[
+                                ascent_request_record["ascent_request_state"]
+                            ] += 1
+                            ascent_request_examples.setdefault(
+                                ascent_request_record["ascent_request_state"],
+                                ascent_request_record,
+                            )
+
+                        if gps_record is not None:
+                            _write_jsonl_line(gps_handle, gps_record)
+                            gps_count += 1
+                            classified = True
+                            gps_record_kind_counter[gps_record["gps_record_kind"]] += 1
+                            gps_examples.setdefault(gps_record["gps_record_kind"], gps_record)
+
+                        if transmission_record is not None:
+                            _write_jsonl_line(transmission_handle, transmission_record)
+                            transmission_count += 1
+                            classified = True
+                            if len(transmission_examples) < 3:
+                                transmission_examples.append(transmission_record)
+
+                        if measurement_record is not None:
+                            _write_jsonl_line(measurement_handle, measurement_record)
+                            measurement_count += 1
+                            classified = True
+                            if len(measurement_examples) < 3:
+                                measurement_examples.append(measurement_record)
+
+                        if not classified:
+                            unclassified_record = {
+                                **common_fields,
+                                "severity": severity,
+                                "unclassified_reason": "no_family_match",
+                                "raw_line": entry.raw_line,
+                            }
+                            _write_jsonl_line(unclassified_handle, unclassified_record)
+                            unclassified_count += 1
+                            if len(unclassified_examples) < 3:
+                                unclassified_examples.append(unclassified_record)
+                            unclassified_patterns[
+                                (entry.subsystem, entry.code, entry.message)
+                            ] += 1
                         continue
 
                     total_records += 1
-                    acquisition_record = _classify_acquisition(entry, instrument_id=path_instrument_id)
-                    ascent_request_record = _classify_ascent_request(entry, instrument_id=path_instrument_id)
-                    gps_record = _classify_gps(entry, instrument_id=path_instrument_id)
-                    transmission_record = _classify_transmission(entry, instrument_id=path_instrument_id)
-                    measurement_record = _classify_measurement(entry, instrument_id=path_instrument_id)
-                    severity = _severity(entry.message)
-                    message_kind = _message_kind(
-                        entry,
-                        has_acquisition=acquisition_record is not None,
-                        has_ascent_request=ascent_request_record is not None,
-                        has_gps=gps_record is not None,
-                        has_transmission=transmission_record is not None,
-                        has_measurement=measurement_record is not None,
+                    parameter_record = _build_parameter_episode_record(
+                        item,
+                        instrument_id=path_instrument_id,
+                        source_file=path,
                     )
-                    common_fields = _common_log_record_fields(entry, instrument_id=path_instrument_id)
-                    operational_record = {
-                        **common_fields,
-                        "severity": severity,
-                        "message_kind": message_kind,
-                        "raw_line": entry.raw_line,
-                    }
-                    _write_jsonl_line(operational_handle, operational_record)
-                    operational_count += 1
-
-                    classified = False
-                    if acquisition_record is not None:
-                        _write_jsonl_line(acquisition_handle, acquisition_record)
-                        acquisition_count += 1
-                        classified = True
-                        acquisition_state_counter[
-                            acquisition_record["acquisition_state"]
-                        ] += 1
-                        acquisition_evidence_kind_counter[
-                            acquisition_record["acquisition_evidence_kind"]
-                        ] += 1
-                        example_key = (
-                            f"{acquisition_record['acquisition_state']}:"
-                            f"{acquisition_record['acquisition_evidence_kind']}"
-                        )
-                        acquisition_examples.setdefault(example_key, acquisition_record)
-
-                    if ascent_request_record is not None:
-                        _write_jsonl_line(ascent_request_handle, ascent_request_record)
-                        ascent_request_count += 1
-                        classified = True
-                        ascent_request_state_counter[
-                            ascent_request_record["ascent_request_state"]
-                        ] += 1
-                        ascent_request_examples.setdefault(
-                            ascent_request_record["ascent_request_state"],
-                            ascent_request_record,
-                        )
-
-                    if gps_record is not None:
-                        _write_jsonl_line(gps_handle, gps_record)
-                        gps_count += 1
-                        classified = True
-                        gps_record_kind_counter[gps_record["gps_record_kind"]] += 1
-                        gps_examples.setdefault(gps_record["gps_record_kind"], gps_record)
-
-                    if transmission_record is not None:
-                        _write_jsonl_line(transmission_handle, transmission_record)
-                        transmission_count += 1
-                        classified = True
-                        if len(transmission_examples) < 3:
-                            transmission_examples.append(transmission_record)
-
-                    if measurement_record is not None:
-                        _write_jsonl_line(measurement_handle, measurement_record)
-                        measurement_count += 1
-                        classified = True
-                        if len(measurement_examples) < 3:
-                            measurement_examples.append(measurement_record)
-
-                    if not classified:
-                        unclassified_record = {
-                            **common_fields,
-                            "severity": severity,
-                            "unclassified_reason": "no_family_match",
-                            "raw_line": entry.raw_line,
-                        }
-                        _write_jsonl_line(unclassified_handle, unclassified_record)
-                        unclassified_count += 1
-                        if len(unclassified_examples) < 3:
-                            unclassified_examples.append(unclassified_record)
-                        unclassified_patterns[
-                            (entry.subsystem, entry.code, entry.message)
-                        ] += 1
+                    _write_jsonl_line(parameter_handle, parameter_record)
+                    parameter_count += 1
+                    if len(parameter_examples) < 3:
+                        parameter_examples.append(parameter_record)
             except OSError as exc:
                 if skipped_log_files is None or run_id is None:
                     raise
@@ -290,6 +344,7 @@ def write_log_jsonl_prototypes(
         acquisition_records=acquisition_count,
         ascent_request_records=ascent_request_count,
         gps_records=gps_count,
+        parameter_records=parameter_count,
         transmission_records=transmission_count,
         measurement_records=measurement_count,
         unclassified_records=unclassified_count,
@@ -300,11 +355,159 @@ def write_log_jsonl_prototypes(
         ascent_request_examples=ascent_request_examples,
         gps_record_kind_counts=dict(gps_record_kind_counter),
         gps_examples=gps_examples,
+        parameter_examples=parameter_examples,
         transmission_examples=transmission_examples,
         measurement_examples=measurement_examples,
         unclassified_examples=unclassified_examples,
         common_unclassified_patterns=common_patterns,
     )
+
+
+def _iter_log_source_units(
+    path: Path,
+    *,
+    on_malformed_line,
+) -> Iterable[OperationalLogEntry | _LogParameterEpisode]:
+    _validate_log_path(path)
+    episode_lines: list[_ParameterEpisodeLine] = []
+    episode_index = 0
+
+    def _flush_episode() -> _LogParameterEpisode | None:
+        nonlocal episode_lines, episode_index
+        if not episode_lines:
+            return None
+        episode = _LogParameterEpisode(
+            episode_index=episode_index,
+            lines=episode_lines,
+        )
+        episode_index += 1
+        episode_lines = []
+        return episode
+
+    with path.open("r", encoding="utf-8", errors="replace") as handle:
+        for line_number, raw_line in enumerate(handle, start=1):
+            line = raw_line.rstrip("\r\n")
+            if not line.strip():
+                episode = _flush_episode()
+                if episode is not None:
+                    yield episode
+                continue
+
+            tagged_match = _LOG_LINE_RE.match(line)
+            if tagged_match is not None:
+                episode = _flush_episode()
+                if episode is not None:
+                    yield episode
+                try:
+                    tag = tagged_match.group("tag")
+                    subsystem, code = _parse_tag(tag)
+                    yield OperationalLogEntry(
+                        time=_parse_time_text(tagged_match.group("time")),
+                        subsystem=subsystem,
+                        code=code,
+                        message=tagged_match.group("message"),
+                        source_kind="log",
+                        raw_line=line,
+                        source_file=path,
+                    )
+                except Exception as exc:
+                    _report_malformed_line(
+                        on_malformed_line,
+                        line_number=line_number,
+                        raw_line=line,
+                        error=str(exc),
+                    )
+                continue
+
+            parameter_line = _parse_parameter_episode_line(line_number=line_number, line=line)
+            if parameter_line is not None:
+                episode_lines.append(parameter_line)
+                continue
+
+            episode = _flush_episode()
+            if episode is not None:
+                yield episode
+            _report_malformed_line(
+                on_malformed_line,
+                line_number=line_number,
+                raw_line=line,
+                error="line does not match expected LOG pattern",
+            )
+
+    episode = _flush_episode()
+    if episode is not None:
+        yield episode
+
+
+def _parse_parameter_episode_line(
+    *,
+    line_number: int,
+    line: str,
+) -> _ParameterEpisodeLine | None:
+    match = _TIMESTAMPED_LINE_RE.match(line)
+    if match is None:
+        return None
+    content = match.group("content")
+    if _PARAMETER_PREFIX_RE.match(content) is None:
+        return None
+    raw_time = match.group("time")
+    return _ParameterEpisodeLine(
+        line_number=line_number,
+        raw_line=line,
+        time=_parse_time_text(raw_time),
+        log_epoch_time=raw_time,
+    )
+
+
+def _build_parameter_episode_record(
+    episode: _LogParameterEpisode,
+    *,
+    instrument_id: str,
+    source_file: Path,
+) -> dict[str, object]:
+    first_line = episode.lines[0]
+    last_line = episode.lines[-1]
+    return {
+        "instrument_id": instrument_id,
+        "source_file": source_file.as_posix(),
+        "episode_index": episode.episode_index,
+        "line_start_index": first_line.line_number,
+        "line_end_index": last_line.line_number,
+        "start_record_time": first_line.time.isoformat(),
+        "end_record_time": last_line.time.isoformat(),
+        "start_log_epoch_time": first_line.log_epoch_time,
+        "end_log_epoch_time": last_line.log_epoch_time,
+        "raw_lines": [line.raw_line for line in episode.lines],
+    }
+
+
+def _parse_tag(tag: str) -> tuple[str, str | None]:
+    if "," not in tag:
+        return tag.strip(), None
+    subsystem, code = tag.split(",", maxsplit=1)
+    return subsystem.strip(), code.strip() or None
+
+
+def _validate_log_path(path: Path) -> None:
+    if path.suffix.upper() != ".LOG":
+        raise ValueError(f"Unsupported operational log source: {path}")
+
+
+def _parse_time_text(text: str) -> datetime:
+    if text.isdigit():
+        return datetime.fromtimestamp(int(text), tz=timezone.utc).replace(tzinfo=None)
+    return datetime.fromisoformat(text)
+
+
+def _report_malformed_line(
+    callback,
+    *,
+    line_number: int,
+    raw_line: str,
+    error: str,
+) -> None:
+    if callback is not None:
+        callback(line_number, raw_line, error)
 
 
 def _message_kind(

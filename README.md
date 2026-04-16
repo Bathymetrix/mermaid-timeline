@@ -148,6 +148,8 @@ The `normalize` command writes:
   - `log_acquisition_records.jsonl`
   - `log_ascent_request_records.jsonl`
   - `log_gps_records.jsonl`
+  - `log_parameter_records.jsonl`
+    - grouped startup/dive-parameter episodes preserved from LOG continuation lines
   - `log_transmission_records.jsonl`
   - `log_measurement_records.jsonl`
   - `log_unclassified_records.jsonl`

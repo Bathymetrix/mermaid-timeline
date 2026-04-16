@@ -35,6 +35,7 @@ def test_write_log_jsonl_prototypes_preserves_unclassified_records(
     assert summary.acquisition_records == 0
     assert summary.ascent_request_records == 0
     assert summary.gps_records == 0
+    assert summary.parameter_records == 0
     assert summary.transmission_records == 2
     assert summary.measurement_records == 2
     assert summary.unclassified_records == 2
@@ -45,6 +46,7 @@ def test_write_log_jsonl_prototypes_preserves_unclassified_records(
         output_dir / "log_ascent_request_records.jsonl"
     )
     gps_records = _read_jsonl(output_dir / "log_gps_records.jsonl")
+    parameter_records = _read_jsonl(output_dir / "log_parameter_records.jsonl")
     transmission_records = _read_jsonl(output_dir / "log_transmission_records.jsonl")
     measurement_records = _read_jsonl(output_dir / "log_measurement_records.jsonl")
     unclassified_records = _read_jsonl(output_dir / "log_unclassified_records.jsonl")
@@ -53,6 +55,7 @@ def test_write_log_jsonl_prototypes_preserves_unclassified_records(
     assert acquisition_records == []
     assert ascent_request_records == []
     assert gps_records == []
+    assert parameter_records == []
     assert len(transmission_records) == 2
     assert len(measurement_records) == 2
     assert len(unclassified_records) == 2
@@ -142,6 +145,7 @@ def test_write_log_jsonl_prototypes_classifies_legacy_pump_and_outflow_lines(
     assert summary.measurement_records == 2
     assert summary.ascent_request_records == 0
     assert summary.gps_records == 0
+    assert summary.parameter_records == 0
     assert summary.unclassified_records == 0
     assert [record["measurement_kind"] for record in measurement_records] == [
         "pump_duration",
@@ -180,6 +184,7 @@ def test_write_log_jsonl_prototypes_emits_acquisition_records(
     assert summary.acquisition_records == 4
     assert summary.ascent_request_records == 0
     assert summary.gps_records == 1
+    assert summary.parameter_records == 0
     assert summary.unclassified_records == 0
     assert summary.acquisition_state_counts == {"started": 2, "stopped": 2}
     assert summary.acquisition_evidence_kind_counts == {
@@ -240,6 +245,7 @@ def test_write_log_jsonl_prototypes_emits_ascent_request_records(
     assert summary.operational_records == 3
     assert summary.ascent_request_records == 2
     assert summary.gps_records == 1
+    assert summary.parameter_records == 0
     assert summary.ascent_request_state_counts == {
         "accepted": 1,
         "rejected": 1,
@@ -256,6 +262,140 @@ def test_write_log_jsonl_prototypes_emits_ascent_request_records(
     assert operational_records[1]["message_kind"] == "status"
     assert gps_records[0]["gps_record_kind"] == "fix_attempt"
     assert unclassified_records == []
+
+
+def test_write_log_jsonl_prototypes_groups_parameter_block_into_one_episode(
+    tmp_path: Path,
+) -> None:
+    log_path = tmp_path / "0100_params.LOG"
+    log_path.write_text(
+        "\n".join(
+            [
+                "1700000000:[MAIN  ,0593]internal pressure 85448Pa",
+                "1700000001:    bypass 20000ms 120000ms (10000ms 200000ms stored)",
+                "1700000001:    valve 60000ms 12750 (60000ms 12750 stored)",
+                "1700000001:    stage[0] 150000mbar (+/-5000mbar) 60000s (<60000s)",
+                "1700000001:    stage[1] 150000mbar (+/-5000mbar) 648000s (<708000s)",
+                "1700000002:[MAIN  ,0621]turn off bluetooth",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "jsonl"
+    malformed_log_lines: list[dict[str, object]] = []
+    summary = write_log_jsonl_prototypes(
+        [log_path],
+        output_dir,
+        run_id="run-1",
+        malformed_log_lines=malformed_log_lines,
+    )
+    parameter_records = _read_jsonl(output_dir / "log_parameter_records.jsonl")
+
+    assert summary.total_records == 3
+    assert summary.operational_records == 2
+    assert summary.parameter_records == 1
+    assert len(parameter_records) == 1
+    assert malformed_log_lines == []
+
+    assert parameter_records[0] == {
+        "instrument_id": "0100",
+        "source_file": log_path.as_posix(),
+        "episode_index": 0,
+        "line_start_index": 2,
+        "line_end_index": 5,
+        "start_record_time": "2023-11-14T22:13:21",
+        "end_record_time": "2023-11-14T22:13:21",
+        "start_log_epoch_time": "1700000001",
+        "end_log_epoch_time": "1700000001",
+        "raw_lines": [
+            "1700000001:    bypass 20000ms 120000ms (10000ms 200000ms stored)",
+            "1700000001:    valve 60000ms 12750 (60000ms 12750 stored)",
+            "1700000001:    stage[0] 150000mbar (+/-5000mbar) 60000s (<60000s)",
+            "1700000001:    stage[1] 150000mbar (+/-5000mbar) 648000s (<708000s)",
+        ],
+    }
+
+
+def test_write_log_jsonl_prototypes_stops_parameter_episode_at_explicit_boundaries(
+    tmp_path: Path,
+) -> None:
+    log_path = tmp_path / "0100_parameter_boundaries.LOG"
+    log_path.write_text(
+        "\n".join(
+            [
+                "1700000000:[MAIN  ,0593]internal pressure 85448Pa",
+                "1700000001:    bypass 20000ms 120000ms (10000ms 200000ms stored)",
+                "1700000001:    valve 60000ms 12750 (60000ms 12750 stored)",
+                "1700000002:[SURF  ,0071]<WARN>timeout",
+                "1700000003:    pump 60000ms 30% 10750 80% (60000ms 30% 10750 80% stored)",
+                "1700000003:    rate 2mbar/s (2mbar/s stored)",
+                "1700000004:*** switching to 0100/NEXT.LOG ***",
+                "1700000005:    surface 500mbar (300mbar stored)",
+                "1700000005:    ascent 8mbar/s (8mbar/s stored)",
+                "1700000006:Command list",
+                "1700000007:[MAIN  ,0007]buoy 467.174-T-0100",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "jsonl"
+    malformed_log_lines: list[dict[str, object]] = []
+    summary = write_log_jsonl_prototypes(
+        [log_path],
+        output_dir,
+        run_id="run-2",
+        malformed_log_lines=malformed_log_lines,
+    )
+    parameter_records = _read_jsonl(output_dir / "log_parameter_records.jsonl")
+    operational_records = _read_jsonl(output_dir / "log_operational_records.jsonl")
+
+    assert summary.total_records == 6
+    assert summary.operational_records == 3
+    assert summary.parameter_records == 3
+    assert [record["episode_index"] for record in parameter_records] == [0, 1, 2]
+    assert [record["line_start_index"] for record in parameter_records] == [2, 5, 8]
+    assert [record["line_end_index"] for record in parameter_records] == [3, 6, 9]
+    assert [record["raw_lines"] for record in parameter_records] == [
+        [
+            "1700000001:    bypass 20000ms 120000ms (10000ms 200000ms stored)",
+            "1700000001:    valve 60000ms 12750 (60000ms 12750 stored)",
+        ],
+        [
+            "1700000003:    pump 60000ms 30% 10750 80% (60000ms 30% 10750 80% stored)",
+            "1700000003:    rate 2mbar/s (2mbar/s stored)",
+        ],
+        [
+            "1700000005:    surface 500mbar (300mbar stored)",
+            "1700000005:    ascent 8mbar/s (8mbar/s stored)",
+        ],
+    ]
+    assert [record["message"] for record in operational_records] == [
+        "internal pressure 85448Pa",
+        "<WARN>timeout",
+        "buoy 467.174-T-0100",
+    ]
+    assert malformed_log_lines == [
+        {
+            "run_id": "run-2",
+            "instrument_id": "0100",
+            "source_file": log_path.as_posix(),
+            "line_number": 7,
+            "raw_line": "1700000004:*** switching to 0100/NEXT.LOG ***",
+            "error": "line does not match expected LOG pattern",
+        },
+        {
+            "run_id": "run-2",
+            "instrument_id": "0100",
+            "source_file": log_path.as_posix(),
+            "line_number": 10,
+            "raw_line": "1700000006:Command list",
+            "error": "line does not match expected LOG pattern",
+        },
+    ]
 
 
 def test_write_log_jsonl_prototypes_emits_gps_records(
