@@ -166,7 +166,7 @@ Invariant details:
 - JSONL field ordering is explicit and stable: provenance/identity first, then time, then family metadata, then payload/accounting, then raw fallback fields
 - existing JSONL lines are never mutated in place; the safe update paths are append and full rewrite
 - dry-run reuses the same planning and diff logic as a real run but performs zero filesystem writes
-- canonical `instrument_id` is resolved from `src/mermaid_records/parse_float_name.py` when a full serial is available, for example `452.020-P-08 -> P0008` and `467.174-T-0100 -> T0100`
+- canonical `instrument_id` is resolved from `src/mermaid_records/parse_instrument_name.py` when a full serial is available, for example `452.020-P-08 -> P0008` and `467.174-T-0100 -> T0100`
 
 ## Decoder Requirements
 

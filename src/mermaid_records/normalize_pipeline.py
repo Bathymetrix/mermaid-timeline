@@ -15,10 +15,10 @@ from typing import Callable
 from .bin2log import Bin2LogConfig, decode_workspace_logs, prepare_decode_workspace
 from .discovery import iter_bin_files, iter_log_files, iter_mer_files
 from .manifest import (
-    begin_float_run,
+    begin_instrument_run,
     build_outputs_manifest,
     build_source_state,
-    finalize_float_run,
+    finalize_instrument_run,
     latest_outputs_manifest,
     latest_source_state,
     output_dir_contains_manifests,
@@ -28,7 +28,11 @@ from .normalize_log import OUTPUT_FILENAMES as LOG_OUTPUT_FILENAMES
 from .normalize_log import write_log_jsonl_prototypes
 from .normalize_mer import OUTPUT_FILENAMES as MER_OUTPUT_FILENAMES
 from .normalize_mer import write_mer_jsonl_prototypes
-from .parse_float_name import FloatName, float_name_from_vit_path, maybe_parse_float_name
+from .parse_instrument_name import (
+    InstrumentName,
+    instrument_name_from_vit_path,
+    maybe_parse_instrument_name,
+)
 
 
 type ExecutionMode = str
@@ -166,7 +170,7 @@ def _run_stateful(
     progress: ProgressCallback | None,
 ) -> NormalizationPipelineSummary | DryRunSummary:
     _emit_progress(progress, f"Discovering inputs under {input_root}")
-    serial_map = _float_names_from_vit(input_root)
+    serial_map = _instrument_names_from_vit(input_root)
     grouped_sources = _group_paths(
         [*sorted(iter_bin_files(input_root)), *sorted(iter_log_files(input_root)), *sorted(iter_mer_files(input_root))]
     )
@@ -184,18 +188,18 @@ def _run_stateful(
             raise ValueError("decoder config is required when BIN inputs are present")
 
         previous_output_dir = previous_outputs.get(group_key)
-        float_name = _resolve_float_name(
+        instrument_name = _resolve_instrument_name(
             group_key=group_key,
             paths=current_sources,
             input_root=input_root,
             previous_output_dir=previous_output_dir,
             serial_map=serial_map,
         )
-        canonical_instrument_id = _canonical_instrument_id(group_key=group_key, float_name=float_name)
+        canonical_instrument_id = _canonical_instrument_id(group_key=group_key, instrument_name=instrument_name)
         instrument_output_name = _instrument_output_name(
             group_key=group_key,
             previous_output_dir=previous_output_dir,
-            float_name=float_name,
+            instrument_name=instrument_name,
         )
         instrument_output_dir = output_dir / instrument_output_name
         if not dry_run:
@@ -273,13 +277,13 @@ def _run_stateful(
         previous_outputs = latest_outputs_manifest(plan.instrument_output_dir)
 
         record_pruned_sources(
-            float_output_dir=plan.instrument_output_dir,
+            instrument_output_dir=plan.instrument_output_dir,
             instrument_id=summary.instrument_id,
             removed_sources=plan.log_diff["removed"] + plan.mer_diff["removed"],
         )
 
-        run_context = begin_float_run(
-            float_output_dir=plan.instrument_output_dir,
+        run_context = begin_instrument_run(
+            instrument_output_dir=plan.instrument_output_dir,
             input_root=input_root,
             raw_source_paths=current_sources,
             config=config if _has_kind(current_sources, "bin") else None,
@@ -298,7 +302,7 @@ def _run_stateful(
         error: BaseException | None = None
         try:
             _execute_log_family(
-                float_output_dir=plan.instrument_output_dir,
+                instrument_output_dir=plan.instrument_output_dir,
                 action=summary.log_action,
                 log_paths=log_paths,
                 bin_paths=bin_paths,
@@ -310,7 +314,7 @@ def _run_stateful(
                 skipped_log_files=skipped_log_files,
             )
             _execute_mer_family(
-                float_output_dir=plan.instrument_output_dir,
+                instrument_output_dir=plan.instrument_output_dir,
                 action=summary.mer_action,
                 mer_paths=mer_paths,
                 instrument_id=summary.instrument_id,
@@ -324,7 +328,7 @@ def _run_stateful(
             raise
         finally:
             _emit_progress(progress, f"Writing manifests for instrument {summary.instrument_id}")
-            finalize_float_run(
+            finalize_instrument_run(
                 context=run_context,
                 preflight_mode=config.preflight_mode if config is not None and _has_kind(current_sources, "bin") else None,
                 error=error,
@@ -387,18 +391,18 @@ def _run_stateless(
     for group_key, current_sources in sorted(grouped_sources.items()):
         if any(path.suffix.upper() == ".BIN" for path in current_sources) and config is None:
             raise ValueError("decoder config is required when BIN inputs are present")
-        float_name = _resolve_float_name(
+        instrument_name = _resolve_instrument_name(
             group_key=group_key,
             paths=current_sources,
             input_root=None,
             previous_output_dir=None,
             serial_map={},
         )
-        canonical_instrument_id = _canonical_instrument_id(group_key=group_key, float_name=float_name)
+        canonical_instrument_id = _canonical_instrument_id(group_key=group_key, instrument_name=instrument_name)
         instrument_output_dir = output_dir / _instrument_output_name(
             group_key=group_key,
             previous_output_dir=None,
-            float_name=float_name,
+            instrument_name=instrument_name,
         )
         input_file_diffs = _diff_sources(
             None,
@@ -451,7 +455,7 @@ def _run_stateless(
         bin_paths = _selected_paths(current_sources, {"bin"})
         mer_paths = _selected_paths(current_sources, {"mer"})
         _execute_log_family(
-            float_output_dir=instrument_output_dir,
+            instrument_output_dir=instrument_output_dir,
             action="append",
             log_paths=log_paths,
             bin_paths=bin_paths,
@@ -463,7 +467,7 @@ def _run_stateless(
             skipped_log_files=skipped_log_files,
         )
         _execute_mer_family(
-            float_output_dir=instrument_output_dir,
+            instrument_output_dir=instrument_output_dir,
             action="append",
             mer_paths=mer_paths,
             instrument_id=summary.instrument_id,
@@ -512,7 +516,7 @@ def _run_stateless(
 
 def _execute_log_family(
     *,
-    float_output_dir: Path,
+    instrument_output_dir: Path,
     action: str,
     log_paths: list[Path],
     bin_paths: list[Path],
@@ -523,7 +527,7 @@ def _execute_log_family(
     malformed_log_lines: list[dict[str, object]] | None,
     skipped_log_files: list[dict[str, object]] | None,
 ) -> None:
-    destinations = [float_output_dir / filename for filename in LOG_OUTPUT_FILENAMES.values()]
+    destinations = [instrument_output_dir / filename for filename in LOG_OUTPUT_FILENAMES.values()]
     if action == "noop":
         return
     if action == "rewrite" and not log_paths and not bin_paths:
@@ -535,7 +539,7 @@ def _execute_log_family(
         raise ValueError("decoder config is required when BIN inputs are present")
 
     _emit_progress(progress, f"Normalizing LOG for instrument {instrument_id}")
-    float_output_dir.mkdir(parents=True, exist_ok=True)
+    instrument_output_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="mermaid-log-family-") as tmpdir:
         temp_dir = Path(tmpdir)
         rendered_paths = list(log_paths)
@@ -546,7 +550,7 @@ def _execute_log_family(
                 python_executable=config.python_executable,
                 decoder_script=config.decoder_script,
                 preflight_mode=config.preflight_mode,
-                preflight_status_dir=float_output_dir,
+                preflight_status_dir=instrument_output_dir,
             )
             workdir = temp_dir / "decoded"
             workdir.mkdir(parents=True, exist_ok=True)
@@ -571,20 +575,20 @@ def _execute_log_family(
         if action == "append":
             _append_rendered_outputs(
                 temp_dir=temp_dir,
-                destination_dir=float_output_dir,
+                destination_dir=instrument_output_dir,
                 filenames=list(LOG_OUTPUT_FILENAMES.values()),
             )
         else:
             _replace_rendered_outputs(
                 temp_dir=temp_dir,
-                destination_dir=float_output_dir,
+                destination_dir=instrument_output_dir,
                 filenames=list(LOG_OUTPUT_FILENAMES.values()),
             )
 
 
 def _execute_mer_family(
     *,
-    float_output_dir: Path,
+    instrument_output_dir: Path,
     action: str,
     mer_paths: list[Path],
     instrument_id: str,
@@ -593,7 +597,7 @@ def _execute_mer_family(
     malformed_mer_blocks: list[dict[str, object]] | None,
     skipped_mer_files: list[dict[str, object]] | None,
 ) -> None:
-    destinations = [float_output_dir / filename for filename in MER_OUTPUT_FILENAMES.values()]
+    destinations = [instrument_output_dir / filename for filename in MER_OUTPUT_FILENAMES.values()]
     if action == "noop":
         return
     if action == "rewrite" and not mer_paths:
@@ -603,7 +607,7 @@ def _execute_mer_family(
         return
 
     _emit_progress(progress, f"Normalizing MER for instrument {instrument_id}")
-    float_output_dir.mkdir(parents=True, exist_ok=True)
+    instrument_output_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="mermaid-mer-family-") as tmpdir:
         temp_dir = Path(tmpdir)
         write_mer_jsonl_prototypes(
@@ -617,13 +621,13 @@ def _execute_mer_family(
         if action == "append":
             _append_rendered_outputs(
                 temp_dir=temp_dir,
-                destination_dir=float_output_dir,
+                destination_dir=instrument_output_dir,
                 filenames=list(MER_OUTPUT_FILENAMES.values()),
             )
         else:
             _replace_rendered_outputs(
                 temp_dir=temp_dir,
-                destination_dir=float_output_dir,
+                destination_dir=instrument_output_dir,
                 filenames=list(MER_OUTPUT_FILENAMES.values()),
             )
 
@@ -694,10 +698,10 @@ def _instrument_output_name(
     *,
     group_key: str,
     previous_output_dir: Path | None,
-    float_name: FloatName | None,
+    instrument_name: InstrumentName | None,
 ) -> str:
-    if float_name is not None:
-        return float_name.serial
+    if instrument_name is not None:
+        return instrument_name.serial
     if previous_output_dir is not None and _looks_like_full_serial(previous_output_dir.name):
         return previous_output_dir.name
     if previous_output_dir is not None:
@@ -705,57 +709,57 @@ def _instrument_output_name(
     return group_key
 
 
-def _float_names_from_vit(input_root: Path) -> dict[str, FloatName]:
-    serial_map: dict[str, FloatName] = {}
+def _instrument_names_from_vit(input_root: Path) -> dict[str, InstrumentName]:
+    serial_map: dict[str, InstrumentName] = {}
     for path in sorted(input_root.glob("*.vit")) + sorted(input_root.glob("*.VIT")):
-        float_name = float_name_from_vit_path(path)
-        if float_name is None:
+        instrument_name = instrument_name_from_vit_path(path)
+        if instrument_name is None:
             continue
-        serial_map[float_name.raw_file_prefix] = float_name
+        serial_map[instrument_name.raw_file_prefix] = instrument_name
     return serial_map
 
 
-def _resolve_float_name(
+def _resolve_instrument_name(
     *,
     group_key: str,
     paths: list[Path],
     input_root: Path | None,
     previous_output_dir: Path | None,
-    serial_map: dict[str, FloatName],
-) -> FloatName | None:
+    serial_map: dict[str, InstrumentName],
+) -> InstrumentName | None:
     if group_key in serial_map:
         return serial_map[group_key]
     if input_root is not None:
-        candidate = maybe_parse_float_name(input_root.name)
+        candidate = maybe_parse_instrument_name(input_root.name)
         if candidate is not None and candidate.raw_file_prefix == group_key:
             return candidate
     if previous_output_dir is not None:
-        candidate = maybe_parse_float_name(previous_output_dir.name)
+        candidate = maybe_parse_instrument_name(previous_output_dir.name)
         if candidate is not None:
             return candidate
     for path in paths:
         for ancestor in path.parents:
             if input_root is not None and ancestor == input_root.parent:
                 break
-            candidate = maybe_parse_float_name(ancestor.name)
+            candidate = maybe_parse_instrument_name(ancestor.name)
             if candidate is not None:
                 return candidate
     for path in paths:
         serial = _serial_from_log(path)
         if serial is not None:
-            candidate = maybe_parse_float_name(serial)
+            candidate = maybe_parse_instrument_name(serial)
             if candidate is not None:
                 return candidate
     return None
 
 
 def _looks_like_full_serial(name: str) -> bool:
-    return maybe_parse_float_name(name) is not None
+    return maybe_parse_instrument_name(name) is not None
 
 
-def _canonical_instrument_id(*, group_key: str, float_name: FloatName | None) -> str:
-    if float_name is not None:
-        return float_name.instrument_id
+def _canonical_instrument_id(*, group_key: str, instrument_name: InstrumentName | None) -> str:
+    if instrument_name is not None:
+        return instrument_name.instrument_id
     return group_key
 
 
@@ -784,24 +788,24 @@ def _serial_from_log(path: Path) -> str | None:
 def _previous_outputs_by_instrument_id(output_dir: Path) -> dict[str, Path]:
     previous: dict[str, Path] = {}
     for latest_path in output_dir.glob("*/manifests/latest.json"):
-        float_output_dir = latest_path.parent.parent
-        state = latest_source_state(float_output_dir)
+        instrument_output_dir = latest_path.parent.parent
+        state = latest_source_state(instrument_output_dir)
         if state is None:
             continue
         raw_sources = state.get("raw_sources", [])
         if not raw_sources:
             continue
-        previous[_raw_file_prefix(Path(raw_sources[0]["source_file"]))] = float_output_dir
+        previous[_raw_file_prefix(Path(raw_sources[0]["source_file"]))] = instrument_output_dir
     return previous
 
 
-def _migrate_output_dir(previous_output_dir: Path | None, float_output_dir: Path) -> None:
-    if previous_output_dir is None or previous_output_dir == float_output_dir:
+def _migrate_output_dir(previous_output_dir: Path | None, instrument_output_dir: Path) -> None:
+    if previous_output_dir is None or previous_output_dir == instrument_output_dir:
         return
-    if not previous_output_dir.exists() or float_output_dir.exists():
+    if not previous_output_dir.exists() or instrument_output_dir.exists():
         return
-    float_output_dir.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(previous_output_dir.as_posix(), float_output_dir.as_posix())
+    instrument_output_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(previous_output_dir.as_posix(), instrument_output_dir.as_posix())
 
 
 def _selected_paths(paths: list[Path], kinds: set[str]) -> list[Path]:

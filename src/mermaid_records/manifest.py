@@ -17,9 +17,9 @@ if TYPE_CHECKING:
     from .bin2log import Bin2LogConfig
 
 
-def begin_float_run(
+def begin_instrument_run(
     *,
-    float_output_dir: Path,
+    instrument_output_dir: Path,
     input_root: Path,
     raw_source_paths: list[Path],
     config: Bin2LogConfig | None,
@@ -29,7 +29,7 @@ def begin_float_run(
 
     started_at = _iso_now()
     run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
-    manifests_root = float_output_dir / "manifests"
+    manifests_root = instrument_output_dir / "manifests"
     run_dir = manifests_root / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     source_state = build_source_state(
@@ -43,12 +43,12 @@ def begin_float_run(
         "started_at": started_at,
         "run_dir": run_dir,
         "manifests_root": manifests_root,
-        "float_output_dir": float_output_dir,
+        "instrument_output_dir": instrument_output_dir,
         "source_state": source_state,
     }
 
 
-def finalize_float_run(
+def finalize_instrument_run(
     *,
     context: dict[str, object],
     preflight_mode: str | None,
@@ -63,19 +63,19 @@ def finalize_float_run(
 
     run_dir = Path(context["run_dir"])
     manifests_root = Path(context["manifests_root"])
-    float_output_dir = Path(context["float_output_dir"])
+    instrument_output_dir = Path(context["instrument_output_dir"])
     source_state = context["source_state"]
     run_json = {
         "run_id": context["run_id"],
         "started_at": context["started_at"],
         "completed_at": _iso_now(),
         "input_root": source_state["input_root"],
-        "output_root": float_output_dir.as_posix(),
+        "output_root": instrument_output_dir.as_posix(),
         "normalization_version": source_state["normalization_version"],
         "preflight_mode": preflight_mode,
-        "status": _run_status(float_output_dir, error),
+        "status": _run_status(instrument_output_dir, error),
     }
-    outputs_json = build_outputs_manifest(float_output_dir)
+    outputs_json = build_outputs_manifest(instrument_output_dir)
 
     _write_json(run_dir / "run.json", run_json)
     _write_json(run_dir / "outputs.json", outputs_json)
@@ -86,7 +86,7 @@ def finalize_float_run(
     _write_jsonl(run_dir / "malformed_mer_blocks.jsonl", malformed_mer_blocks or [])
     _write_jsonl(run_dir / "skipped_mer_files.jsonl", skipped_mer_files or [])
 
-    preflight_root = float_output_dir / "preflight_status.json"
+    preflight_root = instrument_output_dir / "preflight_status.json"
     if preflight_root.exists():
         (run_dir / "preflight_status.json").write_text(
             preflight_root.read_text(encoding="utf-8"),
@@ -98,13 +98,13 @@ def finalize_float_run(
         "status": run_json["status"],
         "started_at": context["started_at"],
         "completed_at": run_json["completed_at"],
-        "run_manifest": (run_dir / "run.json").relative_to(float_output_dir).as_posix(),
-        "outputs_manifest": (run_dir / "outputs.json").relative_to(float_output_dir).as_posix(),
+        "run_manifest": (run_dir / "run.json").relative_to(instrument_output_dir).as_posix(),
+        "outputs_manifest": (run_dir / "outputs.json").relative_to(instrument_output_dir).as_posix(),
         "source_state_manifest": (
-            (run_dir / "source_state.json").relative_to(float_output_dir).as_posix()
+            (run_dir / "source_state.json").relative_to(instrument_output_dir).as_posix()
         ),
         "preflight_status": (
-            (run_dir / "preflight_status.json").relative_to(float_output_dir).as_posix()
+            (run_dir / "preflight_status.json").relative_to(instrument_output_dir).as_posix()
             if (run_dir / "preflight_status.json").exists()
             else None
         ),
@@ -113,27 +113,27 @@ def finalize_float_run(
     _write_json(manifests_root / "latest.json", latest_json)
 
 
-def latest_source_state(float_output_dir: Path) -> dict[str, object] | None:
+def latest_source_state(instrument_output_dir: Path) -> dict[str, object] | None:
     """Load the latest persisted source state for one instrument, if present."""
 
-    latest_path = float_output_dir / "manifests" / "latest.json"
+    latest_path = instrument_output_dir / "manifests" / "latest.json"
     if not latest_path.exists():
         return None
     latest = json.loads(latest_path.read_text(encoding="utf-8"))
-    source_state_path = float_output_dir / latest["source_state_manifest"]
+    source_state_path = instrument_output_dir / latest["source_state_manifest"]
     if not source_state_path.exists():
         return None
     return json.loads(source_state_path.read_text(encoding="utf-8"))
 
 
-def latest_outputs_manifest(float_output_dir: Path) -> dict[str, object] | None:
+def latest_outputs_manifest(instrument_output_dir: Path) -> dict[str, object] | None:
     """Load the latest persisted outputs manifest for one instrument, if present."""
 
-    latest_path = float_output_dir / "manifests" / "latest.json"
+    latest_path = instrument_output_dir / "manifests" / "latest.json"
     if not latest_path.exists():
         return None
     latest = json.loads(latest_path.read_text(encoding="utf-8"))
-    outputs_manifest_path = float_output_dir / latest["outputs_manifest"]
+    outputs_manifest_path = instrument_output_dir / latest["outputs_manifest"]
     if not outputs_manifest_path.exists():
         return None
     return json.loads(outputs_manifest_path.read_text(encoding="utf-8"))
@@ -173,20 +173,20 @@ def build_source_state(
     }
 
 
-def build_outputs_manifest(float_output_dir: Path) -> dict[str, object]:
+def build_outputs_manifest(instrument_output_dir: Path) -> dict[str, object]:
     """Build the output inventory for one instrument-level output root."""
 
     jsonl_outputs = [
         {
-            "path": path.relative_to(float_output_dir).as_posix(),
+            "path": path.relative_to(instrument_output_dir).as_posix(),
             "size_bytes": path.stat().st_size,
         }
-        for path in sorted(float_output_dir.glob("*.jsonl"))
+        for path in sorted(instrument_output_dir.glob("*.jsonl"))
         if path.is_file()
     ]
     counts = {}
     for item in jsonl_outputs:
-        path = float_output_dir / item["path"]
+        path = instrument_output_dir / item["path"]
         with path.open("r", encoding="utf-8") as handle:
             counts[path.name.removesuffix(".jsonl")] = sum(1 for line in handle if line.strip())
     return {
@@ -197,7 +197,7 @@ def build_outputs_manifest(float_output_dir: Path) -> dict[str, object]:
 
 def record_pruned_sources(
     *,
-    float_output_dir: Path,
+    instrument_output_dir: Path,
     instrument_id: str,
     removed_sources: list[dict[str, object]],
 ) -> None:
@@ -205,7 +205,7 @@ def record_pruned_sources(
 
     if not removed_sources:
         return
-    state_dir = float_output_dir / "state"
+    state_dir = instrument_output_dir / "state"
     state_dir.mkdir(parents=True, exist_ok=True)
     pruned_path = state_dir / "pruned_records.jsonl"
     removed_at = _iso_now()
@@ -286,10 +286,10 @@ def _git_commit(cwd: Path) -> str | None:
     return result.stdout.strip() or None
 
 
-def _run_status(float_output_dir: Path, error: BaseException | None) -> str:
+def _run_status(instrument_output_dir: Path, error: BaseException | None) -> str:
     if error is None:
         return "success"
-    if any(float_output_dir.glob("*.jsonl")) or (float_output_dir / "preflight_status.json").exists():
+    if any(instrument_output_dir.glob("*.jsonl")) or (instrument_output_dir / "preflight_status.json").exists():
         return "partial"
     return "failed"
 

@@ -12,7 +12,7 @@ import re
 from typing import Iterable
 
 from .mer_raw import parse_mer_file, parse_mer_file_recoverable
-from .parse_float_name import maybe_parse_float_name
+from .parse_instrument_name import maybe_parse_instrument_name
 
 OUTPUT_FILENAMES = {
     "environment": "mer_environment_records.jsonl",
@@ -435,7 +435,7 @@ def _parse_bare_tag_value(line: str, tag_name: str) -> str | None:
 
 def _fallback_instrument_id(path: Path) -> str:
     for candidate in (path.parent.name, path.stem):
-        parsed = maybe_parse_float_name(candidate)
+        parsed = maybe_parse_instrument_name(candidate)
         if parsed is not None:
             return parsed.instrument_id
     return path.stem.split("_", maxsplit=1)[0]

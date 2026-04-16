@@ -14,7 +14,7 @@ from typing import Iterable
 
 from .models import OperationalLogEntry
 from .operational_raw import iter_operational_log_entries
-from .parse_float_name import maybe_parse_float_name
+from .parse_instrument_name import maybe_parse_instrument_name
 
 OUTPUT_FILENAMES = {
     "operational": "log_operational_records.jsonl",
@@ -527,7 +527,7 @@ def _classify_measurement(
 
 def _fallback_instrument_id(path: Path) -> str:
     for candidate in (path.parent.name, path.stem):
-        parsed = maybe_parse_float_name(candidate)
+        parsed = maybe_parse_instrument_name(candidate)
         if parsed is not None:
             return parsed.instrument_id
     return path.stem.split("_", maxsplit=1)[0]

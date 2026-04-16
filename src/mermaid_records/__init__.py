@@ -18,7 +18,7 @@ from .bin2log import (
     update_decoder_database,
 )
 from .operational_raw import iter_operational_log_entries
-from .parse_float_name import FloatName, parse_float_name
+from .parse_instrument_name import InstrumentName, parse_instrument_name
 from .discovery import (
     iter_bin_files,
     iter_log_files,
@@ -47,7 +47,7 @@ __all__ = [
     "MerJsonlPrototypeSummary",
     "OperationalLogEntry",
     "LogJsonlPrototypeSummary",
-    "FloatName",
+    "InstrumentName",
     "NormalizationPipelineSummary",
     "iter_bin_files",
     "iter_log_files",
@@ -58,7 +58,7 @@ __all__ = [
     "iter_mer_data_blocks",
     "iter_raw_inputs",
     "iter_server_mer",
-    "parse_float_name",
+    "parse_instrument_name",
     "parse_mer_file",
     "write_log_jsonl_prototypes",
     "write_mer_jsonl_prototypes",

@@ -10,24 +10,24 @@ import re
 
 
 _SERIAL_RE = re.compile(
-    r"^(?P<kinst>\d+\.\d+)-(?P<float_code>[A-Z]+)-(?P<float_number>\d+)$"
+    r"^(?P<kinst>\d+\.\d+)-(?P<instrument_code>[A-Z]+)-(?P<instrument_number>\d+)$"
 )
 
 
 @dataclass(frozen=True, slots=True)
-class FloatName:
+class InstrumentName:
     """Canonical decomposition of an Osean instrument serial name."""
 
     serial: str
     kinst: str
-    float_code: str
-    float_number: str
+    instrument_code: str
+    instrument_number: str
     instrument_id: str
     kstnm: str
     raw_file_prefix: str
 
 
-def parse_float_name(serial: str) -> FloatName:
+def parse_instrument_name(serial: str) -> InstrumentName:
     """Parse one canonical instrument serial name."""
 
     match = _SERIAL_RE.fullmatch(serial)
@@ -35,33 +35,33 @@ def parse_float_name(serial: str) -> FloatName:
         raise ValueError(f"Unsupported instrument serial name: {serial}")
 
     kinst = match.group("kinst")
-    float_code = match.group("float_code")
-    float_number = match.group("float_number")
-    padded_number = float_number.zfill(5 - len(float_code))
-    if len(float_code + padded_number) > 5:
+    instrument_code = match.group("instrument_code")
+    instrument_number = match.group("instrument_number")
+    padded_number = instrument_number.zfill(5 - len(instrument_code))
+    if len(instrument_code + padded_number) > 5:
         raise ValueError(f"Instrument code and number exceed 5-char station limit: {serial}")
 
-    return FloatName(
+    return InstrumentName(
         serial=serial,
         kinst=kinst,
-        float_code=float_code,
-        float_number=float_number,
-        instrument_id=f"{float_code}{padded_number}",
-        kstnm=f"{float_code}{padded_number}",
-        raw_file_prefix=float_number,
+        instrument_code=instrument_code,
+        instrument_number=instrument_number,
+        instrument_id=f"{instrument_code}{padded_number}",
+        kstnm=f"{instrument_code}{padded_number}",
+        raw_file_prefix=instrument_number,
     )
 
 
-def maybe_parse_float_name(serial: str) -> FloatName | None:
+def maybe_parse_instrument_name(serial: str) -> InstrumentName | None:
     """Parse one instrument serial name when possible."""
 
     try:
-        return parse_float_name(serial)
+        return parse_instrument_name(serial)
     except ValueError:
         return None
 
 
-def float_name_from_vit_path(path: Path) -> FloatName | None:
+def instrument_name_from_vit_path(path: Path) -> InstrumentName | None:
     """Parse an instrument name from one .vit path when possible."""
 
-    return maybe_parse_float_name(path.stem)
+    return maybe_parse_instrument_name(path.stem)

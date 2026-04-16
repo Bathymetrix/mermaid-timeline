@@ -97,7 +97,7 @@ When a durable output directory is used, `preflight_status.json` records:
 
 ## Instrument Identity
 
-Canonical `instrument_id` resolution is centralized in `src/mermaid_records/parse_float_name.py`.
+Canonical `instrument_id` resolution is centralized in `src/mermaid_records/parse_instrument_name.py`.
 
 Examples:
 
