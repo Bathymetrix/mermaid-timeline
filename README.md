@@ -156,6 +156,10 @@ The `normalize` command writes:
   - `log_gps_records.jsonl`
   - `log_parameter_records.jsonl`
     - grouped startup/dive-parameter episodes preserved from LOG continuation lines
+  - `log_testmode_records.jsonl`
+    - grouped test-mode sessions preserved from LOGs
+  - `log_sbe_records.jsonl`
+    - grouped SBE/profil operational episodes preserved from LOGs
   - `log_transmission_records.jsonl`
   - `log_measurement_records.jsonl`
   - `log_unclassified_records.jsonl`

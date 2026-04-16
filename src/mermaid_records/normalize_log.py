@@ -21,6 +21,8 @@ OUTPUT_FILENAMES = {
     "ascent_request": "log_ascent_request_records.jsonl",
     "gps": "log_gps_records.jsonl",
     "parameter": "log_parameter_records.jsonl",
+    "testmode": "log_testmode_records.jsonl",
+    "sbe": "log_sbe_records.jsonl",
     "transmission": "log_transmission_records.jsonl",
     "measurement": "log_measurement_records.jsonl",
     "unclassified": "log_unclassified_records.jsonl",
@@ -85,6 +87,8 @@ class LogJsonlPrototypeSummary:
     ascent_request_records: int
     gps_records: int
     parameter_records: int
+    testmode_records: int
+    sbe_records: int
     transmission_records: int
     measurement_records: int
     unclassified_records: int
@@ -96,6 +100,8 @@ class LogJsonlPrototypeSummary:
     gps_record_kind_counts: dict[str, int]
     gps_examples: dict[str, dict[str, object]]
     parameter_examples: list[dict[str, object]]
+    testmode_examples: list[dict[str, object]]
+    sbe_examples: list[dict[str, object]]
     transmission_examples: list[dict[str, object]]
     measurement_examples: list[dict[str, object]]
     unclassified_examples: list[dict[str, object]]
@@ -103,17 +109,18 @@ class LogJsonlPrototypeSummary:
 
 
 @dataclass(slots=True)
-class _ParameterEpisodeLine:
+class _GroupedEpisodeLine:
     line_number: int
     raw_line: str
-    time: datetime
-    log_epoch_time: str
+    time: datetime | None
+    log_epoch_time: str | None
 
 
 @dataclass(slots=True)
-class _LogParameterEpisode:
+class _GroupedEpisode:
+    family: str
     episode_index: int
-    lines: list[_ParameterEpisodeLine]
+    lines: list[_GroupedEpisodeLine]
 
 
 def _common_log_record_fields(
@@ -157,6 +164,8 @@ def write_log_jsonl_prototypes(
     ascent_request_count = 0
     gps_count = 0
     parameter_count = 0
+    testmode_count = 0
+    sbe_count = 0
     transmission_count = 0
     measurement_count = 0
     unclassified_count = 0
@@ -168,6 +177,8 @@ def write_log_jsonl_prototypes(
     gps_record_kind_counter: Counter[str] = Counter()
     gps_examples: dict[str, dict[str, object]] = {}
     parameter_examples: list[dict[str, object]] = []
+    testmode_examples: list[dict[str, object]] = []
+    sbe_examples: list[dict[str, object]] = []
     transmission_examples: list[dict[str, object]] = []
     measurement_examples: list[dict[str, object]] = []
     unclassified_examples: list[dict[str, object]] = []
@@ -181,6 +192,8 @@ def write_log_jsonl_prototypes(
         output_paths["ascent_request"].open("w", encoding="utf-8") as ascent_request_handle,
         output_paths["gps"].open("w", encoding="utf-8") as gps_handle,
         output_paths["parameter"].open("w", encoding="utf-8") as parameter_handle,
+        output_paths["testmode"].open("w", encoding="utf-8") as testmode_handle,
+        output_paths["sbe"].open("w", encoding="utf-8") as sbe_handle,
         output_paths["transmission"].open("w", encoding="utf-8") as transmission_handle,
         output_paths["measurement"].open("w", encoding="utf-8") as measurement_handle,
         output_paths["unclassified"].open("w", encoding="utf-8") as unclassified_handle,
@@ -303,15 +316,26 @@ def write_log_jsonl_prototypes(
                         continue
 
                     total_records += 1
-                    parameter_record = _build_parameter_episode_record(
+                    episode_record = _build_grouped_episode_record(
                         item,
                         instrument_id=path_instrument_id,
                         source_file=path,
                     )
-                    _write_jsonl_line(parameter_handle, parameter_record)
-                    parameter_count += 1
-                    if len(parameter_examples) < 3:
-                        parameter_examples.append(parameter_record)
+                    if item.family == "parameter":
+                        _write_jsonl_line(parameter_handle, episode_record)
+                        parameter_count += 1
+                        if len(parameter_examples) < 3:
+                            parameter_examples.append(episode_record)
+                    elif item.family == "testmode":
+                        _write_jsonl_line(testmode_handle, episode_record)
+                        testmode_count += 1
+                        if len(testmode_examples) < 3:
+                            testmode_examples.append(episode_record)
+                    else:
+                        _write_jsonl_line(sbe_handle, episode_record)
+                        sbe_count += 1
+                        if len(sbe_examples) < 3:
+                            sbe_examples.append(episode_record)
             except OSError as exc:
                 if skipped_log_files is None or run_id is None:
                     raise
@@ -345,6 +369,8 @@ def write_log_jsonl_prototypes(
         ascent_request_records=ascent_request_count,
         gps_records=gps_count,
         parameter_records=parameter_count,
+        testmode_records=testmode_count,
+        sbe_records=sbe_count,
         transmission_records=transmission_count,
         measurement_records=measurement_count,
         unclassified_records=unclassified_count,
@@ -356,6 +382,8 @@ def write_log_jsonl_prototypes(
         gps_record_kind_counts=dict(gps_record_kind_counter),
         gps_examples=gps_examples,
         parameter_examples=parameter_examples,
+        testmode_examples=testmode_examples,
+        sbe_examples=sbe_examples,
         transmission_examples=transmission_examples,
         measurement_examples=measurement_examples,
         unclassified_examples=unclassified_examples,
@@ -367,34 +395,91 @@ def _iter_log_source_units(
     path: Path,
     *,
     on_malformed_line,
-) -> Iterable[OperationalLogEntry | _LogParameterEpisode]:
+) -> Iterable[OperationalLogEntry | _GroupedEpisode]:
     _validate_log_path(path)
-    episode_lines: list[_ParameterEpisodeLine] = []
-    episode_index = 0
+    current_episode: _GroupedEpisode | None = None
+    episode_indexes = {"parameter": 0, "testmode": 0, "sbe": 0}
 
-    def _flush_episode() -> _LogParameterEpisode | None:
-        nonlocal episode_lines, episode_index
-        if not episode_lines:
-            return None
-        episode = _LogParameterEpisode(
-            episode_index=episode_index,
-            lines=episode_lines,
+    def _start_episode(family: str) -> None:
+        nonlocal current_episode
+        current_episode = _GroupedEpisode(
+            family=family,
+            episode_index=episode_indexes[family],
+            lines=[],
         )
-        episode_index += 1
-        episode_lines = []
+        episode_indexes[family] += 1
+
+    def _flush_episode() -> _GroupedEpisode | None:
+        nonlocal current_episode
+        if current_episode is None or not current_episode.lines:
+            return None
+        episode = current_episode
+        current_episode = None
         return episode
 
     with path.open("r", encoding="utf-8", errors="replace") as handle:
         for line_number, raw_line in enumerate(handle, start=1):
             line = raw_line.rstrip("\r\n")
             if not line.strip():
+                if current_episode is not None and current_episode.family == "testmode":
+                    current_episode.lines.append(_grouped_line(line_number=line_number, raw_line=line))
+                    continue
                 episode = _flush_episode()
                 if episode is not None:
                     yield episode
                 continue
 
             tagged_match = _LOG_LINE_RE.match(line)
+            if current_episode is not None and current_episode.family == "testmode":
+                current_episode.lines.append(
+                    _grouped_line(
+                        line_number=line_number,
+                        raw_line=line,
+                        tagged_match=tagged_match,
+                    )
+                )
+                if tagged_match is not None and _is_testmode_exit_line(tagged_match):
+                    episode = _flush_episode()
+                    if episode is not None:
+                        yield episode
+                continue
+
             if tagged_match is not None:
+                if _is_testmode_start_line(tagged_match):
+                    episode = _flush_episode()
+                    if episode is not None:
+                        yield episode
+                    _start_episode("testmode")
+                    assert current_episode is not None
+                    current_episode.lines.append(
+                        _grouped_line(
+                            line_number=line_number,
+                            raw_line=line,
+                            tagged_match=tagged_match,
+                        )
+                    )
+                    if _is_testmode_exit_line(tagged_match):
+                        episode = _flush_episode()
+                        if episode is not None:
+                            yield episode
+                    continue
+
+                if _is_sbe_start_or_continue_line(tagged_match, active_episode=current_episode):
+                    if current_episode is None or current_episode.family != "sbe":
+                        episode = _flush_episode()
+                        if episode is not None:
+                            yield episode
+                        _start_episode("sbe")
+                    assert current_episode is not None
+                    current_episode.lines.append(
+                        _grouped_line(
+                            line_number=line_number,
+                            raw_line=line,
+                            tagged_match=tagged_match,
+                        )
+                    )
+                    continue
+
                 episode = _flush_episode()
                 if episode is not None:
                     yield episode
@@ -421,7 +506,13 @@ def _iter_log_source_units(
 
             parameter_line = _parse_parameter_episode_line(line_number=line_number, line=line)
             if parameter_line is not None:
-                episode_lines.append(parameter_line)
+                if current_episode is None or current_episode.family != "parameter":
+                    episode = _flush_episode()
+                    if episode is not None:
+                        yield episode
+                    _start_episode("parameter")
+                assert current_episode is not None
+                current_episode.lines.append(parameter_line)
                 continue
 
             episode = _flush_episode()
@@ -443,30 +534,67 @@ def _parse_parameter_episode_line(
     *,
     line_number: int,
     line: str,
-) -> _ParameterEpisodeLine | None:
+) -> _GroupedEpisodeLine | None:
     match = _TIMESTAMPED_LINE_RE.match(line)
     if match is None:
         return None
     content = match.group("content")
     if _PARAMETER_PREFIX_RE.match(content) is None:
         return None
-    raw_time = match.group("time")
-    return _ParameterEpisodeLine(
+    return _grouped_line(
         line_number=line_number,
         raw_line=line,
-        time=_parse_time_text(raw_time),
+        tagged_match=None,
+    )
+
+
+def _grouped_line(
+    *,
+    line_number: int,
+    raw_line: str,
+    tagged_match=None,
+) -> _GroupedEpisodeLine:
+    raw_time: str | None
+    if tagged_match is None:
+        timestamp_match = _TIMESTAMPED_LINE_RE.match(raw_line)
+        if timestamp_match is None:
+            return _GroupedEpisodeLine(
+                line_number=line_number,
+                raw_line=raw_line,
+                time=None,
+                log_epoch_time=None,
+            )
+        raw_time = timestamp_match.group("time")
+    else:
+        raw_time = tagged_match.group("time")
+    try:
+        parsed_time = _parse_time_text(raw_time)
+    except ValueError:
+        return _GroupedEpisodeLine(
+            line_number=line_number,
+            raw_line=raw_line,
+            time=None,
+            log_epoch_time=None,
+        )
+    return _GroupedEpisodeLine(
+        line_number=line_number,
+        raw_line=raw_line,
+        time=parsed_time,
         log_epoch_time=raw_time,
     )
 
 
-def _build_parameter_episode_record(
-    episode: _LogParameterEpisode,
+def _build_grouped_episode_record(
+    episode: _GroupedEpisode,
     *,
     instrument_id: str,
     source_file: Path,
 ) -> dict[str, object]:
-    first_line = episode.lines[0]
-    last_line = episode.lines[-1]
+    timestamped_lines = [line for line in episode.lines if line.time is not None and line.log_epoch_time is not None]
+    if not timestamped_lines:
+        raise ValueError(f"{episode.family} episode has no timestamped lines")
+    first_line = timestamped_lines[0]
+    last_line = timestamped_lines[-1]
     return {
         "instrument_id": instrument_id,
         "source_file": source_file.as_posix(),
@@ -479,6 +607,35 @@ def _build_parameter_episode_record(
         "end_log_epoch_time": last_line.log_epoch_time,
         "raw_lines": [line.raw_line for line in episode.lines],
     }
+
+
+def _is_testmode_start_line(tagged_match) -> bool:
+    subsystem, _code = _parse_tag(tagged_match.group("tag"))
+    return subsystem == "TESTMD"
+
+
+def _is_testmode_exit_line(tagged_match) -> bool:
+    subsystem, _code = _parse_tag(tagged_match.group("tag"))
+    message = tagged_match.group("message").strip().lower()
+    if subsystem == "TESTMD" and message in {'"q"', '"quit"'}:
+        return True
+    return message in {
+        "end of test mode",
+        "reboot mermaid board",
+        "reboot float",
+    } or message.startswith("rebooting with code")
+
+
+def _is_sbe_start_or_continue_line(tagged_match, *, active_episode: _GroupedEpisode | None) -> bool:
+    subsystem, _code = _parse_tag(tagged_match.group("tag"))
+    message = tagged_match.group("message")
+    if subsystem in {"SBE", "SBE41", "SBE61", "PROFIL"}:
+        return True
+    if subsystem == "STAGE":
+        if "SBE41" in message or "SBE61" in message:
+            return True
+        return active_episode is not None and active_episode.family == "sbe"
+    return False
 
 
 def _parse_tag(tag: str) -> tuple[str, str | None]:

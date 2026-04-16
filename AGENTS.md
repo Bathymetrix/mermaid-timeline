@@ -100,6 +100,8 @@ Normalized record-family direction to keep in mind during cleanup and naming:
 - `acquisition_records`
 - `ascent_request_records`
 - `parameter_records`
+- `testmode_records`
+- `sbe_records`
 - `mer_event_blocks`
 - `acquisition_intervals`
 - `measurement_records`
