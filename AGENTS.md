@@ -227,6 +227,7 @@ Avoid:
 - JSONL outputs use deterministic processing order, not time-order.
 - Normalized JSONL outputs should use basename-only `source_file`; richer full-path provenance belongs in manifests and other run-side artifacts.
 - Do not mutate existing JSONL outputs in place; append and full rewrite are the only safe modification paths.
+- Every per-instrument output directory must materialize the canonical output file set even when some families are empty. At minimum this means all top-level LOG and MER JSONL family files must exist as empty files when they have no records; in `stateful` mode also keep the state/manifest scaffold present for that instrument, while `stateless` mode still must not create manifests.
 - Future dry-run/report behavior must be completely side-effect free, including no file writes of any kind.
 - Persisted `manifests/runs/<run_id>/input_file_diffs.jsonl` is a strict raw input diff log: file-level fields only, no append/rewrite/noop semantics, and no standalone non-file invalidation records.
 - Canonical `instrument_id` should be parsed from the Osean serial naming rules when a full serial is available, for example `452.020-P-08 -> P0008` and `467.174-T-0100 -> T0100`. Do not derive canonical `instrument_id` independently in multiple modules.

@@ -34,6 +34,10 @@ from .parse_instrument_name import (
     maybe_parse_instrument_name,
 )
 
+CANONICAL_INSTRUMENT_JSONL_FILENAMES = tuple(
+    [*LOG_OUTPUT_FILENAMES.values(), *MER_OUTPUT_FILENAMES.values()]
+)
+
 
 type ExecutionMode = str
 type ProgressCallback = Callable[[str], None]
@@ -281,6 +285,10 @@ def _run_stateful(
         summary = plan.summary
         _emit_progress(progress, f"Processing instrument {summary.instrument_id}")
         previous_outputs = latest_outputs_manifest(plan.instrument_output_dir)
+        _ensure_canonical_instrument_layout(
+            instrument_output_dir=plan.instrument_output_dir,
+            include_state_files=True,
+        )
 
         record_pruned_sources(
             instrument_output_dir=plan.instrument_output_dir,
@@ -333,6 +341,10 @@ def _run_stateful(
             error = exc
             raise
         finally:
+            _ensure_canonical_instrument_layout(
+                instrument_output_dir=plan.instrument_output_dir,
+                include_state_files=True,
+            )
             _emit_progress(progress, f"Writing manifests for instrument {summary.instrument_id}")
             finalize_instrument_run(
                 context=run_context,
@@ -464,6 +476,10 @@ def _run_stateless(
             continue
 
         _emit_progress(progress, f"Processing instrument {summary.instrument_id}")
+        _ensure_canonical_instrument_layout(
+            instrument_output_dir=instrument_output_dir,
+            include_state_files=False,
+        )
         malformed_log_lines: list[dict[str, object]] = []
         skipped_log_files: list[dict[str, object]] = []
         malformed_mer_blocks: list[dict[str, object]] = []
@@ -492,6 +508,10 @@ def _run_stateless(
             run_id="stateless",
             malformed_mer_blocks=malformed_mer_blocks,
             skipped_mer_files=skipped_mer_files,
+        )
+        _ensure_canonical_instrument_layout(
+            instrument_output_dir=instrument_output_dir,
+            include_state_files=False,
         )
         _accumulate_issue_metrics(
             metrics,
@@ -686,6 +706,25 @@ def _remove_paths(paths: list[Path]) -> None:
     for path in paths:
         if path.exists():
             path.unlink()
+
+
+def _ensure_canonical_instrument_layout(
+    *,
+    instrument_output_dir: Path,
+    include_state_files: bool,
+) -> None:
+    instrument_output_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_files(
+        instrument_output_dir / filename for filename in CANONICAL_INSTRUMENT_JSONL_FILENAMES
+    )
+    if include_state_files:
+        _ensure_files([instrument_output_dir / "state" / "pruned_records.jsonl"])
+
+
+def _ensure_files(paths) -> None:
+    for path in paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch(exist_ok=True)
 
 
 def _detect_mode(

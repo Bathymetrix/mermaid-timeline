@@ -290,7 +290,9 @@ def _git_commit(cwd: Path) -> str | None:
 def _run_status(instrument_output_dir: Path, error: BaseException | None) -> str:
     if error is None:
         return "success"
-    if any(instrument_output_dir.glob("*.jsonl")) or (instrument_output_dir / "preflight_status.json").exists():
+    if _has_materialized_outputs(instrument_output_dir) or (
+        instrument_output_dir / "preflight_status.json"
+    ).exists():
         return "partial"
     return "failed"
 
@@ -320,6 +322,12 @@ def _hash_file(path: Path) -> str:
 
 def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _has_materialized_outputs(instrument_output_dir: Path) -> bool:
+    return any(
+        path.is_file() and path.stat().st_size > 0 for path in instrument_output_dir.glob("*.jsonl")
+    )
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> None:
