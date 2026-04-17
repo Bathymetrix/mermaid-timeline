@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+import base64
 import json
 from pathlib import Path
 import re
@@ -307,6 +308,23 @@ def _build_environment_record(
         {
             **_common_mer_record_fields(instrument_id, path),
             "environment_kind": environment_kind,
+            "board": _parse_bare_tag_value(stripped_line, "BOARD") if tag_name == "BOARD" else None,
+            "software": _parse_bare_tag_value(stripped_line, "SOFTWARE") if tag_name == "SOFTWARE" else None,
+            "dive_id": _attr_int(attrs, "ID") if tag_name == "DIVE" else None,
+            "dive_declared_event_count": (
+                _attr_int(attrs, "EVENTS") if tag_name == "DIVE" else None
+            ),
+            "pool_declared_event_count": (
+                _attr_int(attrs, "EVENTS") if tag_name == "POOL" else None
+            ),
+            "pool_declared_size_bytes": (
+                _attr_int(attrs, "SIZE") if tag_name == "POOL" else None
+            ),
+            "sample_min": _attr_int(attrs, "MIN") if tag_name == "SAMPLE" else None,
+            "sample_max": _attr_int(attrs, "MAX") if tag_name == "SAMPLE" else None,
+            "true_sample_freq_hz": (
+                _attr_float(attrs, "FS_Hz") if tag_name == "TRUE_SAMPLE_FREQ" else None
+            ),
             "gpsinfo_date": attrs.get("DATE") if tag_name == "GPSINFO" else None,
             "raw_values": raw_values,
             "line": line,
@@ -330,6 +348,35 @@ def _build_parameter_record(
         {
             **_common_mer_record_fields(instrument_id, path),
             "parameter_kind": parameter_kind,
+            "adc_gain": _attr_int(attrs, "GAIN") if tag_name == "ADC" else None,
+            "adc_buffer": attrs.get("BUFFER") if tag_name == "ADC" else None,
+            "stanford_process_duration_h": (
+                _attr_int(attrs, "DURATION_h", "DURATION_H")
+                if tag_name == "STANFORD_PROCESS"
+                else None
+            ),
+            "stanford_process_period_h": (
+                _attr_int(attrs, "PROCESS_PERIOD_h", "PROCESS_PERIOD_H")
+                if tag_name == "STANFORD_PROCESS"
+                else None
+            ),
+            "stanford_process_window_len": (
+                _attr_int(attrs, "WINDOW_LEN") if tag_name == "STANFORD_PROCESS" else None
+            ),
+            "stanford_process_window_type": (
+                attrs.get("WINDOW_TYPE") if tag_name == "STANFORD_PROCESS" else None
+            ),
+            "stanford_process_overlap_percent": (
+                _attr_int(attrs, "OVERLAP_PERCENT")
+                if tag_name == "STANFORD_PROCESS"
+                else None
+            ),
+            "stanford_process_db_offset": (
+                _attr_float(attrs, "dB_OFFSET", "DB_OFFSET")
+                if tag_name == "STANFORD_PROCESS"
+                else None
+            ),
+            "upload_max": attrs.get("UPLOAD_MAX") if tag_name == "MISC" else None,
             "raw_values": raw_values,
             "line": line,
         },
@@ -360,6 +407,9 @@ def _build_event_record(
     record = {
         **_common_mer_record_fields(instrument_id, path),
         "block_index": block_index,
+        "event_index": block_index,
+        "event_info_date": info_attrs.get("DATE"),
+        "event_rounds": info_attrs.get("ROUNDS"),
         "date": info_attrs.get("DATE"),
         "rounds": info_attrs.get("ROUNDS"),
         "pressure": info_attrs.get("PRESSURE"),
@@ -377,6 +427,12 @@ def _build_event_record(
         "stages": format_attrs.get("STAGES"),
         "normalized": format_attrs.get("NORMALIZED"),
         "length": format_attrs.get("LENGTH"),
+        "encoded_payload": (
+            base64.b64encode(data_payload).decode("ascii")
+            if data_payload is not None
+            else None
+        ),
+        "encoded_payload_byte_count": actual_payload_nbytes,
         "data_payload_nbytes": actual_payload_nbytes,
         "expected_payload_nbytes": expected_payload_nbytes,
         "payload_length_matches_expected": payload_length_matches_expected,
@@ -424,6 +480,22 @@ def _parse_attributes(line: str | None) -> dict[str, str]:
     if line is None:
         return {}
     return {key: value for key, value in _ATTR_RE.findall(line)}
+
+
+def _attr_int(attrs: dict[str, str], *keys: str) -> int | None:
+    for key in keys:
+        value = attrs.get(key)
+        if value is not None:
+            return int(value)
+    return None
+
+
+def _attr_float(attrs: dict[str, str], *keys: str) -> float | None:
+    for key in keys:
+        value = attrs.get(key)
+        if value is not None:
+            return float(value)
+    return None
 
 
 def _parse_bare_tag_value(line: str, tag_name: str) -> str | None:

@@ -139,15 +139,6 @@ def iter_mer_event_blocks_recoverable(
                 error="missing INFO tag",
             )
             continue
-        if format_line is None:
-            _report_malformed_block(
-                on_malformed_block,
-                block_index=block_index,
-                block_kind="event_format",
-                raw_block=raw_block,
-                error="missing FORMAT tag",
-            )
-            continue
         if payload is None:
             _report_malformed_block(
                 on_malformed_block,
@@ -252,48 +243,10 @@ def _parse_metadata(path: Path, data: bytes) -> MerFileMetadata:
     )
 
     for line in environment_lines:
-        stripped_line = line.strip()
-        if stripped_line.startswith("<BOARD "):
-            metadata.board = _parse_bare_tag_value(stripped_line, "BOARD")
-        elif stripped_line.startswith("<SOFTWARE "):
-            metadata.software_version = _parse_bare_tag_value(stripped_line, "SOFTWARE")
-        elif stripped_line.startswith("<DIVE "):
-            attrs = _parse_attributes(stripped_line)
-            metadata.dive_id = _parse_int(attrs.get("ID"))
-            metadata.dive_event_count = _parse_int(attrs.get("EVENTS"))
-        elif stripped_line.startswith("<POOL "):
-            attrs = _parse_attributes(stripped_line)
-            metadata.pool_event_count = _parse_int(attrs.get("EVENTS"))
-            metadata.pool_size_bytes = _parse_int(attrs.get("SIZE"))
-        elif stripped_line.startswith("<GPSINFO "):
-            attrs = _parse_attributes(stripped_line)
-            metadata.gps_fixes.append(
-                {
-                    "date": attrs.get("DATE", ""),
-                    "lat": attrs.get("LAT", ""),
-                    "lon": attrs.get("LON", ""),
-                }
-            )
-        elif stripped_line.startswith("<DRIFT "):
-            attrs = _parse_attributes(stripped_line)
-            metadata.drifts.append(
-                {
-                    "sec": _parse_int(attrs.get("SEC")),
-                    "usec": _parse_int(attrs.get("USEC")),
-                }
-            )
-        elif stripped_line.startswith("<CLOCK "):
-            attrs = _parse_attributes(stripped_line)
-            hz = _parse_int(attrs.get("Hz"))
-            if hz is not None:
-                metadata.clock_frequencies_hz.append(hz)
-        elif stripped_line.startswith("<SAMPLE "):
-            attrs = _parse_attributes(stripped_line)
-            metadata.sample_min = _parse_int(attrs.get("MIN"))
-            metadata.sample_max = _parse_int(attrs.get("MAX"))
-        elif stripped_line.startswith("<TRUE_SAMPLE_FREQ "):
-            attrs = _parse_attributes(stripped_line)
-            metadata.true_sample_freq_hz = _parse_float(attrs.get("FS_Hz"))
+        _apply_environment_metadata_line(metadata, line.strip())
+
+    for line in parameter_lines:
+        _apply_parameter_metadata_line(metadata, line.strip())
 
     return metadata
 
@@ -336,47 +289,7 @@ def _parse_metadata_recoverable(
             )
             continue
         try:
-            if stripped_line.startswith("<BOARD "):
-                metadata.board = _parse_bare_tag_value(stripped_line, "BOARD")
-            elif stripped_line.startswith("<SOFTWARE "):
-                metadata.software_version = _parse_bare_tag_value(stripped_line, "SOFTWARE")
-            elif stripped_line.startswith("<DIVE "):
-                attrs = _parse_attributes(stripped_line)
-                metadata.dive_id = _parse_int(attrs.get("ID"))
-                metadata.dive_event_count = _parse_int(attrs.get("EVENTS"))
-            elif stripped_line.startswith("<POOL "):
-                attrs = _parse_attributes(stripped_line)
-                metadata.pool_event_count = _parse_int(attrs.get("EVENTS"))
-                metadata.pool_size_bytes = _parse_int(attrs.get("SIZE"))
-            elif stripped_line.startswith("<GPSINFO "):
-                attrs = _parse_attributes(stripped_line)
-                metadata.gps_fixes.append(
-                    {
-                        "date": attrs.get("DATE", ""),
-                        "lat": attrs.get("LAT", ""),
-                        "lon": attrs.get("LON", ""),
-                    }
-                )
-            elif stripped_line.startswith("<DRIFT "):
-                attrs = _parse_attributes(stripped_line)
-                metadata.drifts.append(
-                    {
-                        "sec": _parse_int(attrs.get("SEC")),
-                        "usec": _parse_int(attrs.get("USEC")),
-                    }
-                )
-            elif stripped_line.startswith("<CLOCK "):
-                attrs = _parse_attributes(stripped_line)
-                hz = _parse_int(attrs.get("Hz"))
-                if hz is not None:
-                    metadata.clock_frequencies_hz.append(hz)
-            elif stripped_line.startswith("<SAMPLE "):
-                attrs = _parse_attributes(stripped_line)
-                metadata.sample_min = _parse_int(attrs.get("MIN"))
-                metadata.sample_max = _parse_int(attrs.get("MAX"))
-            elif stripped_line.startswith("<TRUE_SAMPLE_FREQ "):
-                attrs = _parse_attributes(stripped_line)
-                metadata.true_sample_freq_hz = _parse_float(attrs.get("FS_Hz"))
+            _apply_environment_metadata_line(metadata, stripped_line)
             metadata.raw_environment_lines.append(line)
         except Exception as exc:
             _report_malformed_block(
@@ -398,9 +311,93 @@ def _parse_metadata_recoverable(
                 error="malformed PARAMETERS tag line",
             )
             continue
-        metadata.raw_parameter_lines.append(line)
+        try:
+            _apply_parameter_metadata_line(metadata, stripped_line)
+            metadata.raw_parameter_lines.append(line)
+        except Exception as exc:
+            _report_malformed_block(
+                on_malformed_block,
+                block_index=None,
+                block_kind="parameter",
+                raw_block=line,
+                error=str(exc),
+            )
 
     return metadata
+
+
+def _apply_environment_metadata_line(metadata: MerFileMetadata, stripped_line: str) -> None:
+    if stripped_line.startswith("<BOARD "):
+        metadata.board = _parse_bare_tag_value(stripped_line, "BOARD")
+    elif stripped_line.startswith("<SOFTWARE "):
+        metadata.software_version = _parse_bare_tag_value(stripped_line, "SOFTWARE")
+        metadata.software = metadata.software_version
+    elif stripped_line.startswith("<DIVE "):
+        attrs = _parse_attributes(stripped_line)
+        metadata.dive_id = _parse_int(attrs.get("ID"))
+        metadata.dive_event_count = _parse_int(attrs.get("EVENTS"))
+        metadata.dive_declared_event_count = metadata.dive_event_count
+    elif stripped_line.startswith("<POOL "):
+        attrs = _parse_attributes(stripped_line)
+        metadata.pool_event_count = _parse_int(attrs.get("EVENTS"))
+        metadata.pool_size_bytes = _parse_int(attrs.get("SIZE"))
+        metadata.pool_declared_event_count = metadata.pool_event_count
+        metadata.pool_declared_size_bytes = metadata.pool_size_bytes
+    elif stripped_line.startswith("<GPSINFO "):
+        attrs = _parse_attributes(stripped_line)
+        metadata.gps_fixes.append(
+            {
+                "date": attrs.get("DATE", ""),
+                "lat": attrs.get("LAT", ""),
+                "lon": attrs.get("LON", ""),
+            }
+        )
+    elif stripped_line.startswith("<DRIFT "):
+        attrs = _parse_attributes(stripped_line)
+        metadata.drifts.append(
+            {
+                "sec": _parse_int(attrs.get("SEC")),
+                "usec": _parse_int(attrs.get("USEC")),
+            }
+        )
+    elif stripped_line.startswith("<CLOCK "):
+        attrs = _parse_attributes(stripped_line)
+        hz = _parse_int(attrs.get("Hz"))
+        if hz is not None:
+            metadata.clock_frequencies_hz.append(hz)
+    elif stripped_line.startswith("<SAMPLE "):
+        attrs = _parse_attributes(stripped_line)
+        metadata.sample_min = _parse_int(attrs.get("MIN"))
+        metadata.sample_max = _parse_int(attrs.get("MAX"))
+    elif stripped_line.startswith("<TRUE_SAMPLE_FREQ "):
+        attrs = _parse_attributes(stripped_line)
+        metadata.true_sample_freq_hz = _parse_float(attrs.get("FS_Hz"))
+
+
+def _apply_parameter_metadata_line(metadata: MerFileMetadata, stripped_line: str) -> None:
+    if stripped_line.startswith("<ADC "):
+        attrs = _parse_attributes(stripped_line)
+        metadata.adc_gain = _parse_int(attrs.get("GAIN"))
+        metadata.adc_buffer = attrs.get("BUFFER")
+    elif stripped_line.startswith("<STANFORD_PROCESS "):
+        attrs = _parse_attributes(stripped_line)
+        metadata.stanford_process_duration_h = _parse_int(
+            attrs.get("DURATION_h") or attrs.get("DURATION_H")
+        )
+        metadata.stanford_process_period_h = _parse_int(
+            attrs.get("PROCESS_PERIOD_h") or attrs.get("PROCESS_PERIOD_H")
+        )
+        metadata.stanford_process_window_len = _parse_int(attrs.get("WINDOW_LEN"))
+        metadata.stanford_process_window_type = attrs.get("WINDOW_TYPE")
+        metadata.stanford_process_overlap_percent = _parse_int(
+            attrs.get("OVERLAP_PERCENT")
+        )
+        metadata.stanford_process_db_offset = _parse_float(
+            attrs.get("dB_OFFSET") or attrs.get("DB_OFFSET")
+        )
+    elif stripped_line.startswith("<MISC "):
+        attrs = _parse_attributes(stripped_line)
+        metadata.upload_max = attrs.get("UPLOAD_MAX")
 
 
 def _extract_section(data: bytes, section_name: bytes) -> bytes:

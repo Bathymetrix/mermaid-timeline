@@ -48,6 +48,19 @@ class MerFileMetadata:
     sample_min: int | None = None
     sample_max: int | None = None
     true_sample_freq_hz: float | None = None
+    software: str | None = None
+    dive_declared_event_count: int | None = None
+    pool_declared_event_count: int | None = None
+    pool_declared_size_bytes: int | None = None
+    adc_gain: int | None = None
+    adc_buffer: str | None = None
+    stanford_process_duration_h: int | None = None
+    stanford_process_period_h: int | None = None
+    stanford_process_window_len: int | None = None
+    stanford_process_window_type: str | None = None
+    stanford_process_overlap_percent: int | None = None
+    stanford_process_db_offset: float | None = None
+    upload_max: str | None = None
     raw_environment_lines: list[str] = field(default_factory=list)
     raw_parameter_lines: list[str] = field(default_factory=list)
     source_file: Path | None = None

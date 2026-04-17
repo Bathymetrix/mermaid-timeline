@@ -150,12 +150,14 @@ For metadata:
 - preserve raw `PARAMETERS` lines
 - extract repeated `GPSINFO`, `DRIFT`, and `CLOCK` structures conservatively
 - keep GPS coordinates in raw string form
+- valid Stanford PSD `.MER` files may contain `<ENVIRONMENT>` + `<PARAMETERS>` and zero `<EVENT>` blocks; normalize these cleanly without treating them as malformed
 
 For event blocks:
 
 - parse `INFO`
-- parse `FORMAT`
+- parse `FORMAT` when present, but allow valid Stanford PSD event blocks that contain `INFO` + `DATA` without `FORMAT`
 - preserve `DATA` payload bytes without waveform interpretation
+- for payload byte counts, measure only the bytes strictly inside `<DATA> ... </DATA>` and exclude surrounding framing bytes such as `\n`, `\r`, and `\t`
 
 ## Current File/Layout Assumptions
 

@@ -58,6 +58,45 @@ def test_parse_mer_file_extracts_only_payload_bytes_inside_data_framing(tmp_path
     assert len(blocks[0].data_payload) == 19328
 
 
+def test_parse_mer_file_accepts_stanford_event_without_format(tmp_path: Path) -> None:
+    path = tmp_path / "0002_stanford.MER"
+    payload = b"\x01\x02\x03\x04"
+    path.write_bytes(
+        (
+            b"<ENVIRONMENT>\n"
+            b"\t<BOARD 465152600-75 />\n"
+            b"\t<SOFTWARE 2.1377-STANFORD />\n"
+            b"</ENVIRONMENT>\n"
+            b"<PARAMETERS>\n"
+            b"\t<ADC GAIN=1 BUFFER=ON />\n"
+            b"\t<STANFORD_PROCESS DURATION_h=168 PROCESS_PERIOD_h=3 WINDOW_LEN=1024 WINDOW_TYPE=Hanning OVERLAP_PERCENT=10 dB_OFFSET=0 />\n"
+            b"\t<MISC UPLOAD_MAX=120kB />\n"
+            b"</PARAMETERS>\n"
+            b"<EVENT>\n"
+            b"\t<INFO DATE=2021-10-16T04:31:58.638228 ROUNDS=468 />\n"
+            b"\t<DATA>\n\r"
+            + payload
+            + b"\n\r\t</DATA>\n\r</EVENT>\n"
+        )
+    )
+
+    metadata, blocks = parse_mer_file(path)
+
+    assert metadata.software == "2.1377-STANFORD"
+    assert metadata.adc_gain == 1
+    assert metadata.adc_buffer == "ON"
+    assert metadata.stanford_process_duration_h == 168
+    assert metadata.stanford_process_period_h == 3
+    assert metadata.stanford_process_window_len == 1024
+    assert metadata.stanford_process_window_type == "Hanning"
+    assert metadata.stanford_process_overlap_percent == 10
+    assert metadata.stanford_process_db_offset == 0.0
+    assert metadata.upload_max == "120kB"
+    assert len(blocks) == 1
+    assert blocks[0].raw_format_line is None
+    assert blocks[0].data_payload == payload
+
+
 def test_parse_mer_file_rejects_incomplete_event_block(tmp_path: Path) -> None:
     path = tmp_path / "0100_incomplete.MER"
     path.write_bytes(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 
@@ -131,6 +132,9 @@ def test_write_mer_jsonl_prototypes_preserves_environment_parameter_and_event_ro
         "source_file",
         "source_container",
         "block_index",
+        "event_index",
+        "event_info_date",
+        "event_rounds",
         "date",
         "rounds",
         "pressure",
@@ -148,6 +152,8 @@ def test_write_mer_jsonl_prototypes_preserves_environment_parameter_and_event_ro
         "stages",
         "normalized",
         "length",
+        "encoded_payload",
+        "encoded_payload_byte_count",
         "data_payload_nbytes",
         "expected_payload_nbytes",
         "payload_length_matches_expected",
@@ -155,9 +161,12 @@ def test_write_mer_jsonl_prototypes_preserves_environment_parameter_and_event_ro
         "raw_format_line",
     ]
     assert event_records[0]["date"] == "2024-02-07T22:47:22"
+    assert event_records[0]["event_info_date"] == "2024-02-07T22:47:22"
     assert event_records[0]["fname"] == "2024-02-07T22_47_22.000000"
     assert event_records[0]["smp_offset"] == "614054"
     assert event_records[0]["true_fs"] == "40.014107"
+    assert event_records[0]["encoded_payload"] == base64.b64encode(b"ABC").decode("ascii")
+    assert event_records[0]["encoded_payload_byte_count"] == 3
     assert event_records[0]["data_payload_nbytes"] == 3
     assert event_records[0]["expected_payload_nbytes"] == 19328
     assert event_records[0]["payload_length_matches_expected"] is False
@@ -173,6 +182,8 @@ def test_write_mer_jsonl_prototypes_preserves_environment_parameter_and_event_ro
     assert event_records[1]["trig"] == "2000"
     assert event_records[1]["detrig"] == "5819"
     assert event_records[1]["length"] == "1024"
+    assert event_records[1]["encoded_payload"] == base64.b64encode(b"WXYZ").decode("ascii")
+    assert event_records[1]["encoded_payload_byte_count"] == 4
     assert event_records[1]["data_payload_nbytes"] == 4
     assert event_records[1]["expected_payload_nbytes"] == 4096
     assert event_records[1]["payload_length_matches_expected"] is False
@@ -361,6 +372,7 @@ def test_write_mer_jsonl_prototypes_excludes_data_framing_bytes_from_payload_len
     event_records = _read_jsonl(output_dir / "mer_event_records.jsonl")
 
     assert event_records[0]["data_payload_nbytes"] == 19328
+    assert event_records[0]["encoded_payload_byte_count"] == 19328
     assert event_records[0]["expected_payload_nbytes"] == 19328
     assert event_records[0]["payload_length_matches_expected"] is True
 
@@ -394,8 +406,203 @@ def test_write_mer_jsonl_prototypes_reports_payload_length_mismatch(
     event_records = _read_jsonl(output_dir / "mer_event_records.jsonl")
 
     assert event_records[0]["data_payload_nbytes"] == 7
+    assert event_records[0]["encoded_payload_byte_count"] == 7
     assert event_records[0]["expected_payload_nbytes"] == 8
     assert event_records[0]["payload_length_matches_expected"] is False
+
+
+def test_write_mer_jsonl_prototypes_supports_stanford_events_without_format(
+    tmp_path: Path,
+) -> None:
+    mer_path = tmp_path / "0002_stanford_psd.MER"
+    payload_one = b"\x01\x02\x03\x04"
+    payload_two = b"\x05\x06"
+    mer_path.write_bytes(
+        (
+            b"<ENVIRONMENT>\n"
+            b"\t<BOARD 465152600-75 />\n"
+            b"\t<SOFTWARE 2.1377-STANFORD />\n"
+            b"\t<DIVE ID=5 EVENTS=0 />\n"
+            b"\t<POOL EVENTS=2 SIZE=6 />\n"
+            b"\t<GPSINFO DATE=2021-10-09T02:10:30 LAT=+4324.8290 LON=+00734.9800 />\n"
+            b"\t<GPSINFO DATE=2021-10-09T02:21:13 LAT=+4324.7380 LON=+00734.8920 />\n"
+            b"\t<DRIFT USEC=0 />\n"
+            b"\t<DRIFT SEC=1 USEC=-999938 />\n"
+            b"\t<CLOCK Hz=3686304 />\n"
+            b"\t<CLOCK Hz=3686303 />\n"
+            b"\t<SAMPLE MIN=2147483647 MAX=-2147483648 />\n"
+            b"\t<TRUE_SAMPLE_FREQ FS_Hz=40.014121 />\n"
+            b"</ENVIRONMENT>\n"
+            b"<PARAMETERS>\n"
+            b"\t<ADC GAIN=1 BUFFER=ON />\n"
+            b"\t<STANFORD_PROCESS DURATION_h=168 PROCESS_PERIOD_h=3 WINDOW_LEN=1024 WINDOW_TYPE=Hanning OVERLAP_PERCENT=10 dB_OFFSET=0 />\n"
+            b"\t<MISC UPLOAD_MAX=120kB />\n"
+            b"</PARAMETERS>\n"
+            b"<EVENT>\n"
+            b"\t<INFO DATE=2021-10-16T04:31:58.638228 ROUNDS=468 />\n"
+            b"\t<DATA>\n\r"
+            + payload_one
+            + b"\n\r\t</DATA>\n\r</EVENT>\n"
+            b"<EVENT>\n"
+            b"\t<INFO DATE=2021-10-16T01:31:59.250533 ROUNDS=469 />\n"
+            b"\t<DATA>\n\r"
+            + payload_two
+            + b"\n\r\t</DATA>\n\r</EVENT>\n"
+        )
+    )
+
+    output_dir = tmp_path / "jsonl"
+    malformed_mer_blocks: list[dict[str, object]] = []
+    summary = write_mer_jsonl_prototypes(
+        [mer_path],
+        output_dir,
+        run_id="run-stanford",
+        malformed_mer_blocks=malformed_mer_blocks,
+    )
+
+    environment_records = _read_jsonl(output_dir / "mer_environment_records.jsonl")
+    parameter_records = _read_jsonl(output_dir / "mer_parameter_records.jsonl")
+    event_records = _read_jsonl(output_dir / "mer_event_records.jsonl")
+
+    assert malformed_mer_blocks == []
+    assert summary.total_mer_files == 1
+    assert summary.zero_event_files == 0
+    assert [record["event_index"] for record in event_records] == [0, 1]
+    assert [record["event_rounds"] for record in event_records] == ["468", "469"]
+    assert [record["event_info_date"] for record in event_records] == [
+        "2021-10-16T04:31:58.638228",
+        "2021-10-16T01:31:59.250533",
+    ]
+    assert [record["raw_format_line"] for record in event_records] == [None, None]
+    assert event_records[0]["encoded_payload"] == base64.b64encode(payload_one).decode("ascii")
+    assert event_records[0]["encoded_payload_byte_count"] == len(payload_one)
+    assert event_records[0]["expected_payload_nbytes"] is None
+    assert event_records[0]["payload_length_matches_expected"] is None
+    assert event_records[1]["encoded_payload"] == base64.b64encode(payload_two).decode("ascii")
+    assert event_records[1]["encoded_payload_byte_count"] == len(payload_two)
+
+    board_record = next(
+        record for record in environment_records if record["environment_kind"] == "board"
+    )
+    software_record = next(
+        record for record in environment_records if record["environment_kind"] == "software"
+    )
+    dive_record = next(
+        record for record in environment_records if record["environment_kind"] == "dive"
+    )
+    pool_record = next(
+        record for record in environment_records if record["environment_kind"] == "pool"
+    )
+    sample_record = next(
+        record for record in environment_records if record["environment_kind"] == "sample"
+    )
+    true_fs_record = next(
+        record
+        for record in environment_records
+        if record["environment_kind"] == "true_sample_freq"
+    )
+
+    assert board_record["board"] == "465152600-75"
+    assert software_record["software"] == "2.1377-STANFORD"
+    assert dive_record["dive_id"] == 5
+    assert dive_record["dive_declared_event_count"] == 0
+    assert pool_record["pool_declared_event_count"] == 2
+    assert pool_record["pool_declared_size_bytes"] == 6
+    assert sample_record["sample_min"] == 2147483647
+    assert sample_record["sample_max"] == -2147483648
+    assert true_fs_record["true_sample_freq_hz"] == 40.014121
+    assert sum(1 for record in environment_records if record["environment_kind"] == "gpsinfo") == 2
+    assert sum(1 for record in environment_records if record["environment_kind"] == "drift") == 2
+    assert sum(1 for record in environment_records if record["environment_kind"] == "clock") == 2
+
+    adc_record = next(
+        record for record in parameter_records if record["parameter_kind"] == "adc"
+    )
+    stanford_process_record = next(
+        record
+        for record in parameter_records
+        if record["parameter_kind"] == "stanford_process"
+    )
+    misc_record = next(
+        record for record in parameter_records if record["parameter_kind"] == "misc"
+    )
+
+    assert adc_record["adc_gain"] == 1
+    assert adc_record["adc_buffer"] == "ON"
+    assert stanford_process_record["stanford_process_duration_h"] == 168
+    assert stanford_process_record["stanford_process_period_h"] == 3
+    assert stanford_process_record["stanford_process_window_len"] == 1024
+    assert stanford_process_record["stanford_process_window_type"] == "Hanning"
+    assert stanford_process_record["stanford_process_overlap_percent"] == 10
+    assert stanford_process_record["stanford_process_db_offset"] == 0.0
+    assert misc_record["upload_max"] == "120kB"
+
+
+def test_write_mer_jsonl_prototypes_accepts_metadata_only_stanford_mer(
+    tmp_path: Path,
+) -> None:
+    mer_path = tmp_path / "0007_metadata_only.MER"
+    mer_path.write_bytes(
+        (
+            b"<ENVIRONMENT>\n"
+            b"\t<BOARD 465152600-80 />\n"
+            b"\t<SOFTWARE 2.1377-STANFORD />\n"
+            b"\t<DIVE ID=0 EVENTS=0 />\n"
+            b"\t<POOL EVENTS=0 SIZE=0 />\n"
+            b"</ENVIRONMENT>\n"
+            b"<PARAMETERS>\n"
+            b"\t<ADC GAIN=1 BUFFER=ON />\n"
+            b"\t<STANFORD_PROCESS DURATION_h=168 PROCESS_PERIOD_h=1 WINDOW_LEN=512 WINDOW_TYPE=Hanning OVERLAP_PERCENT=0 dB_OFFSET=0 />\n"
+            b"\t<MISC UPLOAD_MAX=120kB />\n"
+            b"</PARAMETERS>\n"
+        )
+    )
+
+    output_dir = tmp_path / "jsonl"
+    malformed_mer_blocks: list[dict[str, object]] = []
+    summary = write_mer_jsonl_prototypes(
+        [mer_path],
+        output_dir,
+        run_id="run-stanford-empty",
+        malformed_mer_blocks=malformed_mer_blocks,
+    )
+
+    assert malformed_mer_blocks == []
+    assert summary.total_mer_files == 1
+    assert summary.zero_event_files == 1
+    assert summary.total_event_blocks == 0
+    assert _read_jsonl(output_dir / "mer_event_records.jsonl") == []
+
+
+def test_write_mer_jsonl_prototypes_excludes_stanford_data_framing_bytes_without_format(
+    tmp_path: Path,
+) -> None:
+    mer_path = tmp_path / "0002_framed_stanford.MER"
+    payload = b"\x10\x20\x30\x40\x50"
+    mer_path.write_bytes(
+        (
+            b"<ENVIRONMENT>\n"
+            b"\t<BOARD 465152600-75 />\n"
+            b"</ENVIRONMENT>\n"
+            b"<PARAMETERS>\n"
+            b"\t<MISC UPLOAD_MAX=120kB />\n"
+            b"</PARAMETERS>\n"
+            b"<EVENT>\n"
+            b"\t<INFO DATE=2021-10-16T04:31:58.638228 ROUNDS=468 />\n"
+            b"\t<DATA>\n\r"
+            + payload
+            + b"\n\r\t</DATA>\n\r</EVENT>\n"
+        )
+    )
+
+    output_dir = tmp_path / "jsonl"
+    write_mer_jsonl_prototypes([mer_path], output_dir)
+    event_records = _read_jsonl(output_dir / "mer_event_records.jsonl")
+
+    assert event_records[0]["encoded_payload"] == base64.b64encode(payload).decode("ascii")
+    assert event_records[0]["encoded_payload_byte_count"] == len(payload)
+    assert event_records[0]["data_payload_nbytes"] == len(payload)
+    assert event_records[0]["raw_format_line"] is None
 
 
 def _read_jsonl(path: Path) -> list[dict[str, object]]:
