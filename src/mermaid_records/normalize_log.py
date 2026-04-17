@@ -20,11 +20,12 @@ OUTPUT_FILENAMES = {
     "acquisition": "log_acquisition_records.jsonl",
     "ascent_request": "log_ascent_request_records.jsonl",
     "gps": "log_gps_records.jsonl",
+    "pressure_temperature": "log_pressure_temperature_records.jsonl",
+    "battery": "log_battery_records.jsonl",
     "parameter": "log_parameter_records.jsonl",
     "testmode": "log_testmode_records.jsonl",
     "sbe": "log_sbe_records.jsonl",
     "transmission": "log_transmission_records.jsonl",
-    "measurement": "log_measurement_records.jsonl",
     "unclassified": "log_unclassified_records.jsonl",
 }
 
@@ -96,7 +97,9 @@ _UPLOAD_DISCONNECT_RE = re.compile(
 )
 _UPLOAD_BATCH_RE = re.compile(r"^Upload data files\.\.\.$", re.IGNORECASE)
 _P_T_S_RE = re.compile(r"\bP\s*[+-]?\d+,\s*T\s*[+-]?\d+,\s*S\s*[+-]?\d+\b")
-_PRESS_TEMP_RE = re.compile(r"\bP\s*[+-]?\d+mbar,\s*T\s*[+-]?\d+mdegC\b")
+_PRESS_TEMP_RE = re.compile(
+    r"\bP\s*(?P<pressure_mbar>[+-]?\d+)mbar,\s*T\s*(?P<temperature_mdegc>[+-]?\d+)mdegC\b"
+)
 _BATTERY_RE = re.compile(r"\bbattery\s+(?P<mv>[+-]?\d+)mV,\s+(?P<ua>[+-]?\d+)uA\b", re.IGNORECASE)
 _TRANSFER_RE = re.compile(
     r"need to transfer\s+(?P<ml>[+-]?\d+)mL\s+\(pump during\s+(?P<ms>\d+)ms\)",
@@ -128,11 +131,13 @@ class LogJsonlPrototypeSummary:
     acquisition_records: int
     ascent_request_records: int
     gps_records: int
+    pressure_temperature_records: int
+    battery_records: int
     parameter_records: int
     testmode_records: int
     sbe_records: int
     transmission_records: int
-    measurement_records: int
+    routed_measurement_to_operational_records: int
     unclassified_records: int
     acquisition_state_counts: dict[str, int]
     acquisition_evidence_kind_counts: dict[str, int]
@@ -145,7 +150,8 @@ class LogJsonlPrototypeSummary:
     testmode_examples: list[dict[str, object]]
     sbe_examples: list[dict[str, object]]
     transmission_examples: list[dict[str, object]]
-    measurement_examples: list[dict[str, object]]
+    pressure_temperature_examples: list[dict[str, object]]
+    battery_examples: list[dict[str, object]]
     unclassified_examples: list[dict[str, object]]
     common_unclassified_patterns: list[dict[str, object]]
 
@@ -217,7 +223,9 @@ def write_log_jsonl_prototypes(
     testmode_count = 0
     sbe_count = 0
     transmission_count = 0
-    measurement_count = 0
+    pressure_temperature_count = 0
+    battery_count = 0
+    routed_measurement_to_operational_count = 0
     unclassified_count = 0
     acquisition_state_counter: Counter[str] = Counter()
     acquisition_evidence_kind_counter: Counter[str] = Counter()
@@ -230,7 +238,8 @@ def write_log_jsonl_prototypes(
     testmode_examples: list[dict[str, object]] = []
     sbe_examples: list[dict[str, object]] = []
     transmission_examples: list[dict[str, object]] = []
-    measurement_examples: list[dict[str, object]] = []
+    pressure_temperature_examples: list[dict[str, object]] = []
+    battery_examples: list[dict[str, object]] = []
     unclassified_examples: list[dict[str, object]] = []
     unclassified_patterns: Counter[tuple[str, str | None, str]] = Counter()
 
@@ -241,11 +250,12 @@ def write_log_jsonl_prototypes(
         output_paths["acquisition"].open("w", encoding="utf-8") as acquisition_handle,
         output_paths["ascent_request"].open("w", encoding="utf-8") as ascent_request_handle,
         output_paths["gps"].open("w", encoding="utf-8") as gps_handle,
+        output_paths["pressure_temperature"].open("w", encoding="utf-8") as pressure_temperature_handle,
+        output_paths["battery"].open("w", encoding="utf-8") as battery_handle,
         output_paths["parameter"].open("w", encoding="utf-8") as parameter_handle,
         output_paths["testmode"].open("w", encoding="utf-8") as testmode_handle,
         output_paths["sbe"].open("w", encoding="utf-8") as sbe_handle,
         output_paths["transmission"].open("w", encoding="utf-8") as transmission_handle,
-        output_paths["measurement"].open("w", encoding="utf-8") as measurement_handle,
         output_paths["unclassified"].open("w", encoding="utf-8") as unclassified_handle,
     ):
         for path in sorted_paths:
@@ -279,7 +289,15 @@ def write_log_jsonl_prototypes(
                         ascent_request_record = _classify_ascent_request(entry, instrument_id=path_instrument_id)
                         gps_record = _classify_gps(entry, instrument_id=path_instrument_id)
                         transmission_record = _classify_transmission(entry, instrument_id=path_instrument_id)
-                        measurement_record = _classify_measurement(entry, instrument_id=path_instrument_id)
+                        pressure_temperature_record = _classify_pressure_temperature(
+                            entry,
+                            instrument_id=path_instrument_id,
+                        )
+                        battery_record = _classify_battery(
+                            entry,
+                            instrument_id=path_instrument_id,
+                        )
+                        routed_measurement_kind = _classify_operational_measurement_fallback(entry)
                         severity = _severity(entry.message)
                         message_kind = _message_kind(
                             entry,
@@ -287,7 +305,11 @@ def write_log_jsonl_prototypes(
                             has_ascent_request=ascent_request_record is not None,
                             has_gps=gps_record is not None,
                             has_transmission=transmission_record is not None,
-                            has_measurement=measurement_record is not None,
+                            has_measurement=(
+                                pressure_temperature_record is not None
+                                or battery_record is not None
+                                or routed_measurement_kind is not None
+                            ),
                         )
                         common_fields = _common_log_record_fields(entry, instrument_id=path_instrument_id)
                         rollover_fields = _rollover_fields(entry)
@@ -344,12 +366,23 @@ def write_log_jsonl_prototypes(
                             if len(transmission_examples) < 3:
                                 transmission_examples.append(transmission_record)
 
-                        if measurement_record is not None:
-                            _write_jsonl_line(measurement_handle, measurement_record)
-                            measurement_count += 1
+                        if pressure_temperature_record is not None:
+                            _write_jsonl_line(pressure_temperature_handle, pressure_temperature_record)
+                            pressure_temperature_count += 1
                             classified = True
-                            if len(measurement_examples) < 3:
-                                measurement_examples.append(measurement_record)
+                            if len(pressure_temperature_examples) < 3:
+                                pressure_temperature_examples.append(pressure_temperature_record)
+
+                        if battery_record is not None:
+                            _write_jsonl_line(battery_handle, battery_record)
+                            battery_count += 1
+                            classified = True
+                            if len(battery_examples) < 3:
+                                battery_examples.append(battery_record)
+
+                        if routed_measurement_kind is not None:
+                            routed_measurement_to_operational_count += 1
+                            classified = True
 
                         if not classified:
                             unclassified_record = {
@@ -421,11 +454,13 @@ def write_log_jsonl_prototypes(
         acquisition_records=acquisition_count,
         ascent_request_records=ascent_request_count,
         gps_records=gps_count,
+        pressure_temperature_records=pressure_temperature_count,
+        battery_records=battery_count,
         parameter_records=parameter_count,
         testmode_records=testmode_count,
         sbe_records=sbe_count,
         transmission_records=transmission_count,
-        measurement_records=measurement_count,
+        routed_measurement_to_operational_records=routed_measurement_to_operational_count,
         unclassified_records=unclassified_count,
         acquisition_state_counts=dict(acquisition_state_counter),
         acquisition_evidence_kind_counts=dict(acquisition_evidence_kind_counter),
@@ -438,7 +473,8 @@ def write_log_jsonl_prototypes(
         testmode_examples=testmode_examples,
         sbe_examples=sbe_examples,
         transmission_examples=transmission_examples,
-        measurement_examples=measurement_examples,
+        pressure_temperature_examples=pressure_temperature_examples,
+        battery_examples=battery_examples,
         unclassified_examples=unclassified_examples,
         common_unclassified_patterns=common_patterns,
     )
@@ -987,67 +1023,61 @@ def _base_transmission_record(
     }
 
 
-def _classify_measurement(
+def _classify_pressure_temperature(
     entry: OperationalLogEntry,
     *,
     instrument_id: str,
 ) -> dict[str, object] | None:
-    message = entry.message
-    raw_values: dict[str, str] = {}
-    measurement_kind: str | None = None
-
-    if _P_T_S_RE.search(message):
-        measurement_kind = "pressure_temperature_salinity"
-        raw_values["pts"] = message.strip()
-    elif _PRESS_TEMP_RE.search(message):
-        measurement_kind = "pressure_temperature"
-        raw_values["pt"] = message.strip()
-    else:
-        battery_match = _BATTERY_RE.search(message)
-        transfer_match = _TRANSFER_RE.search(message)
-        pump_match = _PUMP_RE.search(message)
-        duration_only_match = _DURATION_ONLY_RE.search(message)
-        outflow_match = _OUTFLOW_RE.search(message)
-        pressure_match = _PRESSURE_VALUE_RE.search(message)
-
-        if battery_match is not None:
-            measurement_kind = "battery"
-            raw_values["battery_mv"] = battery_match.group("mv")
-            raw_values["current_ua"] = battery_match.group("ua")
-            if pressure_match is not None:
-                raw_values["pressure_mbar"] = pressure_match.group("pressure")
-        elif transfer_match is not None:
-            measurement_kind = "transfer"
-            raw_values["transfer_ml"] = transfer_match.group("ml")
-            raw_values["pump_duration_ms"] = transfer_match.group("ms")
-        elif pump_match is not None:
-            measurement_kind = "pump_duration"
-            raw_values["pump_duration_ms"] = pump_match.group("ms")
-        elif duration_only_match is not None and entry.subsystem == "PUMP":
-            measurement_kind = "pump_duration"
-            raw_values["pump_duration_ms"] = duration_only_match.group("ms")
-        elif outflow_match is not None:
-            measurement_kind = "outflow"
-            raw_values["outflow_raw"] = outflow_match.group("value")
-        elif "mbar" in message and any(
-            token in message.lower()
-            for token in ("rate ", "surface ", "near ", "middle ", "far ", "ascent ", "offset")
-        ):
-            measurement_kind = "pressure_setting"
-            raw_values["setting"] = message.strip()
-        elif "mbar/s" in message and "from " in message.lower() and " to " in message.lower():
-            measurement_kind = "pressure_rate"
-            raw_values["transition"] = message.strip()
-
-    if measurement_kind is None:
+    match = _PRESS_TEMP_RE.search(entry.message)
+    if match is None:
         return None
 
     return {
         **_common_log_record_fields(entry, instrument_id=instrument_id),
-        "measurement_kind": measurement_kind,
-        "raw_values": raw_values,
+        "pressure_mbar": int(match.group("pressure_mbar")),
+        "temperature_mdegc": int(match.group("temperature_mdegc")),
         "raw_line": entry.raw_line,
     }
+
+
+def _classify_battery(
+    entry: OperationalLogEntry,
+    *,
+    instrument_id: str,
+) -> dict[str, object] | None:
+    match = _BATTERY_RE.search(entry.message)
+    if match is None:
+        return None
+
+    return {
+        **_common_log_record_fields(entry, instrument_id=instrument_id),
+        "voltage_mv": int(match.group("mv")),
+        "current_ua": int(match.group("ua")),
+        "raw_line": entry.raw_line,
+    }
+
+
+def _classify_operational_measurement_fallback(entry: OperationalLogEntry) -> str | None:
+    message = entry.message
+    if _P_T_S_RE.search(message):
+        return "pressure_temperature_salinity"
+    if _TRANSFER_RE.search(message):
+        return "transfer"
+    if _PUMP_RE.search(message):
+        return "pump_duration"
+    if _DURATION_ONLY_RE.search(message) and entry.subsystem == "PUMP":
+        return "pump_duration"
+    if _OUTFLOW_RE.search(message):
+        return "outflow"
+    lowered = message.lower()
+    if "mbar" in message and any(
+        token in lowered
+        for token in ("rate ", "surface ", "near ", "middle ", "far ", "ascent ", "offset")
+    ):
+        return "pressure_setting"
+    if "mbar/s" in message and "from " in lowered and " to " in lowered:
+        return "pressure_rate"
+    return None
 
 
 def _fallback_instrument_id(path: Path) -> str:

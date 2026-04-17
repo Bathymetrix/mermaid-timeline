@@ -104,9 +104,16 @@ Normalized record-family direction to keep in mind during cleanup and naming:
 - `sbe_records`
 - `mer_event_blocks`
 - `acquisition_intervals`
-- `measurement_records`
+- `pressure_temperature_records`
+- `battery_records`
 - `gps_records`
 - `unclassified_operational_records`
+
+For LOG-derived measurement-adjacent lines:
+
+- dedicated `log_pressure_temperature_records.jsonl` is only for literal `P...mbar,T...mdegC` observations with parsed `pressure_mbar` and `temperature_mdegc`
+- dedicated `log_battery_records.jsonl` is only for literal `battery ...mV, ...uA` telemetry with parsed `voltage_mv` and `current_ua`
+- other lines that were formerly routed into `log_measurement_records.jsonl` now remain only in `log_operational_records.jsonl`; do not expand their parsing without an explicit request
 
 For derived operational-family prototypes, no parsed `OperationalLogEntry` should disappear silently. Each parsed operational line must end up either in one or more derived family streams or in `unclassified_operational_records`.
 

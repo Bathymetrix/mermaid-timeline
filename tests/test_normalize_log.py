@@ -43,7 +43,9 @@ def test_write_log_jsonl_prototypes_preserves_unclassified_records(
     assert summary.testmode_records == 0
     assert summary.sbe_records == 0
     assert summary.transmission_records == 2
-    assert summary.measurement_records == 2
+    assert summary.pressure_temperature_records == 1
+    assert summary.battery_records == 0
+    assert summary.routed_measurement_to_operational_records == 1
     assert summary.unclassified_records == 2
 
     operational_records = _read_jsonl(output_dir / "log_operational_records.jsonl")
@@ -52,22 +54,26 @@ def test_write_log_jsonl_prototypes_preserves_unclassified_records(
         output_dir / "log_ascent_request_records.jsonl"
     )
     gps_records = _read_jsonl(output_dir / "log_gps_records.jsonl")
+    pressure_temperature_records = _read_jsonl(
+        output_dir / "log_pressure_temperature_records.jsonl"
+    )
+    battery_records = _read_jsonl(output_dir / "log_battery_records.jsonl")
     parameter_records = _read_jsonl(output_dir / "log_parameter_records.jsonl")
     testmode_records = _read_jsonl(output_dir / "log_testmode_records.jsonl")
     sbe_records = _read_jsonl(output_dir / "log_sbe_records.jsonl")
     transmission_records = _read_jsonl(output_dir / "log_transmission_records.jsonl")
-    measurement_records = _read_jsonl(output_dir / "log_measurement_records.jsonl")
     unclassified_records = _read_jsonl(output_dir / "log_unclassified_records.jsonl")
 
     assert len(operational_records) == 6
     assert acquisition_records == []
     assert ascent_request_records == []
     assert gps_records == []
+    assert len(pressure_temperature_records) == 1
+    assert battery_records == []
     assert parameter_records == []
     assert testmode_records == []
     assert sbe_records == []
     assert len(transmission_records) == 2
-    assert len(measurement_records) == 2
     assert len(unclassified_records) == 2
 
     assert operational_records[0]["message_kind"] == "upload"
@@ -98,12 +104,12 @@ def test_write_log_jsonl_prototypes_preserves_unclassified_records(
     assert transmission_records[1]["source_file"] == log_path.name
     assert "time" not in transmission_records[1]
 
-    assert measurement_records[0]["measurement_kind"] == "pressure_temperature"
-    assert measurement_records[1]["measurement_kind"] == "pump_duration"
-    assert measurement_records[0]["record_time"] == "2023-11-14T22:13:22"
-    assert measurement_records[0]["log_epoch_time"] == "1700000002"
-    assert measurement_records[0]["source_file"] == log_path.name
-    assert "time" not in measurement_records[0]
+    assert pressure_temperature_records[0]["pressure_mbar"] == 20179
+    assert pressure_temperature_records[0]["temperature_mdegc"] == 32767
+    assert pressure_temperature_records[0]["record_time"] == "2023-11-14T22:13:22"
+    assert pressure_temperature_records[0]["log_epoch_time"] == "1700000002"
+    assert pressure_temperature_records[0]["source_file"] == log_path.name
+    assert "time" not in pressure_temperature_records[0]
 
     assert all(
         record["unclassified_reason"] == "no_family_match"
@@ -151,22 +157,74 @@ def test_write_log_jsonl_prototypes_classifies_legacy_pump_and_outflow_lines(
 
     output_dir = tmp_path / "jsonl"
     summary = write_log_jsonl_prototypes([log_path], output_dir)
-    measurement_records = _read_jsonl(output_dir / "log_measurement_records.jsonl")
+    pressure_temperature_records = _read_jsonl(
+        output_dir / "log_pressure_temperature_records.jsonl"
+    )
+    battery_records = _read_jsonl(output_dir / "log_battery_records.jsonl")
     unclassified_records = _read_jsonl(output_dir / "log_unclassified_records.jsonl")
 
     assert summary.total_records == 2
-    assert summary.measurement_records == 2
+    assert summary.pressure_temperature_records == 0
+    assert summary.battery_records == 0
+    assert summary.routed_measurement_to_operational_records == 2
     assert summary.ascent_request_records == 0
     assert summary.gps_records == 0
     assert summary.parameter_records == 0
     assert summary.testmode_records == 0
     assert summary.sbe_records == 0
     assert summary.unclassified_records == 0
-    assert [record["measurement_kind"] for record in measurement_records] == [
-        "pump_duration",
-        "outflow",
-    ]
+    assert pressure_temperature_records == []
+    assert battery_records == []
     assert unclassified_records == []
+
+
+def test_write_log_jsonl_prototypes_preserves_old_measurement_population_accounting(
+    tmp_path: Path,
+) -> None:
+    log_path = tmp_path / "06_routing.LOG"
+    log_path.write_text(
+        "\n".join(
+            [
+                "1700000000:[PRESS ,0081]P    +0mbar,T-10881mdegC",
+                "1700000001:[MONITR,0461]battery 14685mV,   12688uA",
+                "1700000002:[PUMP  ,0016]pump during 30000ms",
+                "1700000003:[PUMP  ,0378]Outflow calculated : 2711",
+                "1700000004:[MAIN  ,0007]New pressure offset: 40mbar",
+                "1700000005:[MAIN  ,0007]from +2mbar/s to +4mbar/s",
+                "1700000006:[MAIN  ,0007]P +12,T -34,S +56",
+                "1700000007:[PUMP  ,0016]need to transfer +6mL (pump during 7185ms)",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "jsonl"
+    summary = write_log_jsonl_prototypes([log_path], output_dir)
+    pressure_temperature_records = _read_jsonl(
+        output_dir / "log_pressure_temperature_records.jsonl"
+    )
+    battery_records = _read_jsonl(output_dir / "log_battery_records.jsonl")
+    operational_records = _read_jsonl(output_dir / "log_operational_records.jsonl")
+
+    old_measurement_population = 8
+    new_total = (
+        len(pressure_temperature_records)
+        + len(battery_records)
+        + summary.routed_measurement_to_operational_records
+    )
+
+    assert old_measurement_population == new_total
+    assert summary.pressure_temperature_records == 1
+    assert summary.battery_records == 1
+    assert summary.routed_measurement_to_operational_records == 6
+    assert [record["message"] for record in pressure_temperature_records] == [
+        "P    +0mbar,T-10881mdegC"
+    ]
+    assert [record["message"] for record in battery_records] == [
+        "battery 14685mV,   12688uA"
+    ]
+    assert [record["message_kind"] for record in operational_records] == ["measurement"] * 8
 
 
 def test_write_log_jsonl_prototypes_emits_acquisition_records(

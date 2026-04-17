@@ -609,20 +609,9 @@ def test_stateful_logs_malformed_mer_blocks_and_continues(tmp_path: Path) -> Non
     malformed_rows = _jsonl_lines(run_dir / "malformed_mer_blocks.jsonl")
     event_rows = _jsonl_lines(output_root / "467.174-T-0100" / "mer_event_records.jsonl")
 
-    assert len(event_rows) == 1
-    assert event_rows[0]["fname"] == "good.000000"
-    assert malformed_rows == [
-        {
-            "block_index": 0,
-            "block_kind": "event_format",
-            "error": "missing FORMAT tag",
-            "instrument_id": "T0100",
-            "raw_block": malformed_rows[0]["raw_block"],
-            "run_id": latest["run_id"],
-            "source_file": mer_path.as_posix(),
-        }
-    ]
-    assert "<EVENT>" in malformed_rows[0]["raw_block"]
+    assert [row["fname"] for row in event_rows] == ["bad.000000", "good.000000"]
+    assert event_rows[0]["raw_format_line"] is None
+    assert malformed_rows == []
     assert _jsonl_lines(run_dir / "skipped_mer_files.jsonl") == []
 
 
@@ -777,11 +766,12 @@ def test_stateful_run_materializes_canonical_output_file_set(tmp_path: Path) -> 
         "log_acquisition_records.jsonl",
         "log_ascent_request_records.jsonl",
         "log_gps_records.jsonl",
+        "log_pressure_temperature_records.jsonl",
+        "log_battery_records.jsonl",
         "log_parameter_records.jsonl",
         "log_testmode_records.jsonl",
         "log_sbe_records.jsonl",
         "log_transmission_records.jsonl",
-        "log_measurement_records.jsonl",
         "log_unclassified_records.jsonl",
         "mer_environment_records.jsonl",
         "mer_parameter_records.jsonl",
