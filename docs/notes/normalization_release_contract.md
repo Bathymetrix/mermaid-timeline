@@ -55,7 +55,9 @@ Shared options:
 - `--decoder-script`
 - `--preflight-mode {strict,cached}`
 - `--dry-run`
+- `--force-rewrite`
 - `--json`
+- `--verbose`
 
 `--decoder-python` and `--decoder-script` must be supplied together when any `BIN` inputs are present.
 
