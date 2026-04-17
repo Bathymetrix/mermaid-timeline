@@ -172,7 +172,8 @@ The `normalize` command writes:
   - `log_sbe_records.jsonl`
     - grouped SBE/profil operational episodes preserved from LOGs
   - `log_transmission_records.jsonl`
-  - `log_measurement_records.jsonl`
+  - `log_pressure_temperature_records.jsonl`
+  - `log_battery_records.jsonl`
   - `log_unclassified_records.jsonl`
 - per-instrument MER JSONL outputs:
   - `mer_environment_records.jsonl`
@@ -191,6 +192,11 @@ Invariant details:
 - `--force-rewrite` overrides incremental planning and forces targeted instrument families to rewrite
 - dry-run reuses the same planning and diff logic as a real run but performs zero filesystem writes
 - canonical `instrument_id` is resolved from `src/mermaid_records/parse_instrument_name.py` when a full serial is available, for example `452.020-P-08 -> P0008` and `467.174-T-0100 -> T0100`
+- LOG routing happens in layers:
+  - grouped structural routes such as `parameter`, `testmode`, and `sbe` are resolved first
+  - ordinary parsed operational lines always emit one row to `log_operational_records.jsonl`
+  - then each ordinary operational line may match zero or one derived family
+  - multi-match across derived operational families is a normalization error and fails loudly
 
 ## Decoder Requirements
 

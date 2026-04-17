@@ -121,7 +121,15 @@ For normalized LOG/MER family boundaries:
 - keep structurally different line kinds together when they describe one process or state machine, using internal `*_kind` fields instead of fragmenting them into one-file-per-scalar outputs
 - avoid reviving vague mixed-domain buckets like the former measurement family
 
-For derived operational-family prototypes, no parsed `OperationalLogEntry` should disappear silently. Each parsed operational line must end up either in one or more derived family streams or in `unclassified_operational_records`.
+For derived operational-family prototypes, no parsed `OperationalLogEntry` should disappear silently. Each parsed operational line must end up either in exactly one derived family stream or in `unclassified_operational_records`.
+
+Operational-family routing contract:
+
+- grouped structural LOG routes such as `parameter`, `testmode`, and `sbe` are resolved before ordinary `OperationalLogEntry` family classification
+- every ordinary `OperationalLogEntry` always emits one record to `log_operational_records.jsonl`
+- after that, an ordinary operational line may match zero or one derived family
+- zero derived matches route to `log_unclassified_records.jsonl`
+- two or more derived matches are a normalization bug and must fail loudly; do not hide them with precedence or multi-family emission
 
 For acquisition evidence prototypes, preserve the distinction between exact transitions and state assertions:
 
