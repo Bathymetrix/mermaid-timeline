@@ -241,6 +241,7 @@ Avoid:
 - The normalization pipeline has two execution modes:
   - `stateful`: directory input, manifests enabled, incremental rerun logic enabled
   - `stateless`: explicit file-list input, no manifests, no incremental logic, no pruning
+- Stateless reruns are rewrite-only for targeted instrument outputs; never append in stateless mode, even when the explicit inputs are unchanged.
 - Stateless mode must error if the target output directory already contains manifests.
 - Stateful incremental behavior is binary and conservative:
   - append only when the only change is newly added raw source files

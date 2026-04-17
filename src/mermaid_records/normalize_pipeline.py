@@ -447,14 +447,12 @@ def _run_stateless(
             mer_count=_count_kind(current_sources, "mer"),
             log_action=(
                 "rewrite"
-                if force_rewrite and (_has_kind(current_sources, "bin") or _has_kind(current_sources, "log"))
-                else "append" if _has_kind(current_sources, "bin") or _has_kind(current_sources, "log")
+                if _has_kind(current_sources, "bin") or _has_kind(current_sources, "log")
                 else "noop"
             ),
             mer_action=(
                 "rewrite"
-                if force_rewrite and _has_kind(current_sources, "mer")
-                else "append" if _has_kind(current_sources, "mer")
+                if _has_kind(current_sources, "mer")
                 else "noop"
             ),
             decoder_state_invalidated=False,

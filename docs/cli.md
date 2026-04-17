@@ -59,6 +59,8 @@ This distinction matters for:
 
 If you are documenting or debugging normalization results, always keep the selected execution mode in mind.
 
+Stateless mode is rewrite-only in v1 for the targeted instrument outputs. Because stateless runs do not persist manifests or incremental state, rerunning the same explicit inputs rewrites the package-owned JSONL families instead of appending to them.
+
 ## Output families
 
 Typical per-instrument outputs include LOG and MER JSONL families such as:
@@ -94,7 +96,7 @@ Additionally:
 
 For the targeted instrument output directories, it removes package-owned generated artifacts before regeneration so that stale outputs from older layouts do not persist. It should be understood as instrument-scoped cleanup and rebuild, not global deletion of all outputs under the entire output root.
 
-In stateless mode, `--force-rewrite` still rewrites only the targeted instrument outputs; it does not enable manifests or other stateful bookkeeping.
+In stateless mode, `--force-rewrite` does not change the rerun contract: targeted instrument outputs already rewrite by default, and the flag still does not enable manifests or other stateful bookkeeping.
 
 ## Operational guidance
 

@@ -74,6 +74,8 @@ Supported normalize flags currently include:
 
 The CLI has both stateful mode and stateless mode. See `docs/cli.md` for the authoritative interface and mode details.
 
+In v1, stateless reruns are rewrite-only for the targeted instrument outputs. They do not use append/noop incremental behavior, so rerunning the same explicit inputs does not silently duplicate JSONL rows.
+
 ## Output model
 
 Normalization writes per-instrument JSONL record families under the selected output directory.

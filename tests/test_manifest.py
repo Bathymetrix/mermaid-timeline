@@ -410,12 +410,26 @@ def test_stateless_dry_run_is_side_effect_free(tmp_path: Path) -> None:
     payload = summary.to_dict()
 
     assert summary.mode == "stateless"
-    assert payload["instruments"][0]["families"]["log"]["action"] == "append"
+    assert payload["instruments"][0]["families"]["log"]["action"] == "rewrite"
     assert payload["instruments"][0]["counts"]["new"] == 1
     assert not output_root.exists()
 
 
-def test_stateless_force_rewrite_replaces_existing_outputs(tmp_path: Path) -> None:
+def test_stateless_rerun_rewrites_existing_outputs_without_duplication(tmp_path: Path) -> None:
+    first_log = tmp_path / "0100_first.LOG"
+    _write_log(first_log, "first")
+    output_root = tmp_path / "output"
+
+    run_normalization_pipeline(output_dir=output_root, input_files=[first_log])
+    summary = run_normalization_pipeline(output_dir=output_root, input_files=[first_log])
+
+    operational_rows = _jsonl_lines(output_root / "0100" / "log_operational_records.jsonl")
+
+    assert summary.processed_instruments[0].log_action == "rewrite"
+    assert [row["message"] for row in operational_rows] == ["first"]
+
+
+def test_stateless_rerun_rewrites_existing_outputs_without_force_rewrite(tmp_path: Path) -> None:
     first_log = tmp_path / "0100_first.LOG"
     second_log = tmp_path / "0100_second.LOG"
     _write_log(first_log, "first")
@@ -423,11 +437,7 @@ def test_stateless_force_rewrite_replaces_existing_outputs(tmp_path: Path) -> No
     output_root = tmp_path / "output"
 
     run_normalization_pipeline(output_dir=output_root, input_files=[first_log])
-    summary = run_normalization_pipeline(
-        output_dir=output_root,
-        input_files=[second_log],
-        force_rewrite=True,
-    )
+    summary = run_normalization_pipeline(output_dir=output_root, input_files=[second_log])
 
     operational_rows = _jsonl_lines(output_root / "0100" / "log_operational_records.jsonl")
 
