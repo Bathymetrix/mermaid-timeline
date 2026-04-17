@@ -153,6 +153,37 @@ def test_stateful_force_rewrite_rewrites_unchanged_outputs(tmp_path: Path) -> No
     assert len(event_rows) == 1
 
 
+def test_stateful_force_rewrite_removes_stale_package_outputs(tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    (input_root / "467.174-T-0100.vit").write_text("", encoding="utf-8")
+    _write_log(input_root / "0100_first.LOG", "first")
+    _write_mer(input_root / "0100_first.MER")
+    output_root = tmp_path / "output"
+
+    run_normalization_pipeline(input_root, output_dir=output_root)
+    instrument_dir = output_root / "467.174-T-0100"
+    (instrument_dir / "log_measurement_records.jsonl").write_text('{"stale": true}\n', encoding="utf-8")
+    (instrument_dir / "keep.me").write_text("preserve", encoding="utf-8")
+    (instrument_dir / "manifests" / "stale.txt").write_text("old manifest", encoding="utf-8")
+    (instrument_dir / "state" / "stale.txt").write_text("old state", encoding="utf-8")
+
+    run_normalization_pipeline(
+        input_root,
+        output_dir=output_root,
+        force_rewrite=True,
+    )
+
+    latest = _read_json(instrument_dir / "manifests" / "latest.json")
+
+    assert not (instrument_dir / "log_measurement_records.jsonl").exists()
+    assert (instrument_dir / "keep.me").read_text(encoding="utf-8") == "preserve"
+    assert not (instrument_dir / "manifests" / "stale.txt").exists()
+    assert not (instrument_dir / "state" / "stale.txt").exists()
+    assert (instrument_dir / "manifests" / "runs" / latest["run_id"]).is_dir()
+    assert (instrument_dir / "state" / "pruned_records.jsonl").exists()
+
+
 def test_stateful_append_path_appends_only_new_mer_files(tmp_path: Path) -> None:
     input_root = tmp_path / "inputs"
     input_root.mkdir()
@@ -402,6 +433,30 @@ def test_stateless_force_rewrite_replaces_existing_outputs(tmp_path: Path) -> No
 
     assert summary.processed_instruments[0].log_action == "rewrite"
     assert [row["message"] for row in operational_rows] == ["second"]
+
+
+def test_stateless_force_rewrite_removes_stale_package_outputs(tmp_path: Path) -> None:
+    log_path = tmp_path / "0100_first.LOG"
+    _write_log(log_path, "first")
+    output_root = tmp_path / "output"
+
+    run_normalization_pipeline(output_dir=output_root, input_files=[log_path])
+    instrument_dir = output_root / "0100"
+    (instrument_dir / "log_measurement_records.jsonl").write_text('{"stale": true}\n', encoding="utf-8")
+    (instrument_dir / "keep.me").write_text("preserve", encoding="utf-8")
+    (instrument_dir / "state").mkdir()
+    (instrument_dir / "state" / "stale.txt").write_text("old state", encoding="utf-8")
+
+    run_normalization_pipeline(
+        output_dir=output_root,
+        input_files=[log_path],
+        force_rewrite=True,
+    )
+
+    assert not (instrument_dir / "log_measurement_records.jsonl").exists()
+    assert (instrument_dir / "keep.me").read_text(encoding="utf-8") == "preserve"
+    assert not (instrument_dir / "state" / "stale.txt").exists()
+    assert not (instrument_dir / "manifests").exists()
 
 
 def test_dry_run_force_rewrite_reports_rewrite_actions_without_writing(tmp_path: Path) -> None:

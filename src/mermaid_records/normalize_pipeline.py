@@ -285,6 +285,8 @@ def _run_stateful(
         summary = plan.summary
         _emit_progress(progress, f"Processing instrument {summary.instrument_id}")
         previous_outputs = latest_outputs_manifest(plan.instrument_output_dir)
+        if _overall_instrument_action(summary) == "rewrite":
+            _remove_package_owned_outputs(plan.instrument_output_dir)
         _ensure_canonical_instrument_layout(
             instrument_output_dir=plan.instrument_output_dir,
             include_state_files=True,
@@ -476,6 +478,8 @@ def _run_stateless(
             continue
 
         _emit_progress(progress, f"Processing instrument {summary.instrument_id}")
+        if _overall_instrument_action(summary) == "rewrite":
+            _remove_package_owned_outputs(instrument_output_dir)
         _ensure_canonical_instrument_layout(
             instrument_output_dir=instrument_output_dir,
             include_state_files=False,
@@ -706,6 +710,23 @@ def _remove_paths(paths: list[Path]) -> None:
     for path in paths:
         if path.exists():
             path.unlink()
+
+
+def _remove_package_owned_outputs(instrument_output_dir: Path) -> None:
+    if not instrument_output_dir.exists():
+        return
+
+    for path in sorted(instrument_output_dir.glob("log_*.jsonl")):
+        if path.is_file():
+            path.unlink()
+    for path in sorted(instrument_output_dir.glob("mer_*.jsonl")):
+        if path.is_file():
+            path.unlink()
+
+    for dirname in ("manifests", "state"):
+        path = instrument_output_dir / dirname
+        if path.is_dir():
+            shutil.rmtree(path)
 
 
 def _ensure_canonical_instrument_layout(
