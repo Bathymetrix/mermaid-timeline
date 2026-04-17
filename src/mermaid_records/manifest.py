@@ -11,7 +11,6 @@ import os
 from pathlib import Path
 import subprocess
 from typing import TYPE_CHECKING
-from uuid import uuid4
 
 if TYPE_CHECKING:
     from .bin2log import Bin2LogConfig
