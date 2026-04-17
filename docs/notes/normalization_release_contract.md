@@ -129,11 +129,12 @@ Per instrument:
   log_acquisition_records.jsonl
   log_ascent_request_records.jsonl
   log_gps_records.jsonl
+  log_pressure_temperature_records.jsonl
+  log_battery_records.jsonl
   log_parameter_records.jsonl
   log_testmode_records.jsonl
   log_sbe_records.jsonl
   log_transmission_records.jsonl
-  log_measurement_records.jsonl
   log_unclassified_records.jsonl
   mer_environment_records.jsonl
   mer_parameter_records.jsonl
@@ -171,11 +172,12 @@ LOG families:
 - `log_acquisition_records.jsonl`
 - `log_ascent_request_records.jsonl`
 - `log_gps_records.jsonl`
+- `log_pressure_temperature_records.jsonl`
+- `log_battery_records.jsonl`
 - `log_parameter_records.jsonl`
 - `log_testmode_records.jsonl`
 - `log_sbe_records.jsonl`
 - `log_transmission_records.jsonl`
-- `log_measurement_records.jsonl`
 - `log_unclassified_records.jsonl`
 
 MER families:
@@ -270,11 +272,17 @@ MER families:
 - `referenced_artifact` (`/` normalized to `_` when the LOG text is parsed as a LOG/MER filename reference)
 - `rate_bytes_per_s`
 
-`log_measurement_records.jsonl`
+`log_pressure_temperature_records.jsonl`
 
 - all operational provenance/source fields
-- `measurement_kind`
-- `raw_values`
+- `pressure_mbar`
+- `temperature_mdegc`
+
+`log_battery_records.jsonl`
+
+- all operational provenance/source fields
+- `voltage_mv`
+- `current_ua`
 
 `log_unclassified_records.jsonl`
 
