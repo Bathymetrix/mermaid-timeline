@@ -115,6 +115,12 @@ For LOG-derived measurement-adjacent lines:
 - dedicated `log_battery_records.jsonl` is only for literal `battery ...mV, ...uA` telemetry with parsed `voltage_mv` and `current_ua`
 - other lines that were formerly routed into `log_measurement_records.jsonl` now remain only in `log_operational_records.jsonl`; do not expand their parsing without an explicit request
 
+For normalized LOG/MER family boundaries:
+
+- split files by coherent subsystem or workflow, not by the presence of a primary scalar field
+- keep structurally different line kinds together when they describe one process or state machine, using internal `*_kind` fields instead of fragmenting them into one-file-per-scalar outputs
+- avoid reviving vague mixed-domain buckets like the former measurement family
+
 For derived operational-family prototypes, no parsed `OperationalLogEntry` should disappear silently. Each parsed operational line must end up either in one or more derived family streams or in `unclassified_operational_records`.
 
 For acquisition evidence prototypes, preserve the distinction between exact transitions and state assertions:
