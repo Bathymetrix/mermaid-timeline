@@ -182,7 +182,7 @@ For event blocks:
 
 ## Current File/Layout Assumptions
 
-- The primary shared LOG parser module is `src/mermaid_records/operational_raw.py`.
+- The primary shared LOG parser module is `src/mermaid_records/parse_log.py`.
 - Discovery should cover only raw `BIN`, `LOG`, and `MER` inputs relevant to this package.
 - `LOG` is the native per-dive operational source.
 - A single `.MER` may include DET data from the current dive plus REG/REQ data from previous dives. Do not infer dive membership from `MerEventBlock.date` during parsing.

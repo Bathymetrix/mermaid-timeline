@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from mermaid_records.mer_raw import parse_mer_file
+from mermaid_records.parse_mer import parse_mer_file
 
 
 def test_parse_mer_file_extracts_metadata_and_blocks() -> None:

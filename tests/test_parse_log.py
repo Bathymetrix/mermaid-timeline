@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from mermaid_records.operational_raw import iter_operational_log_entries
+from mermaid_records.parse_log import iter_operational_log_entries
 
 
 def test_iter_operational_log_entries_parses_log_fixture_line() -> None:
