@@ -29,6 +29,10 @@ OUTPUT_FILENAMES = {
 }
 
 _LOG_LINE_RE = re.compile(r"^(?P<time>.+?):\[(?P<tag>[^\]]+)\](?P<message>.*)$")
+# Shared structurally parsed LOG line family for wrapped source-literal
+# severity prefixes such as timestamp:<WARN>[TAG]... and timestamp:<ERR>[TAG]...
+# Keep this narrow and corpus-driven rather than treating arbitrary <PREFIX>
+# forms as generic tagged LOG syntax.
 _WRAPPED_TAGGED_LOG_LINE_RE = re.compile(
     r"^(?P<time>.+?):(?P<prefix><(?:ERR|WARN|WRN)>)\[(?P<tag>[^\]]+)\](?P<message>.*)$"
 )
@@ -697,6 +701,13 @@ def _parse_tag(tag: str) -> tuple[str, str | None]:
 
 
 def _parse_tagged_log_line(line: str) -> _ParsedTaggedLogLine | None:
+    """Parse shared tagged LOG line families.
+
+    Supports both the standard timestamp:[TAG]message form and the wrapped
+    source-literal severity-prefix form used in corpus lines such as
+    timestamp:<WARN>[TAG]message and timestamp:<ERR>[TAG]message.
+    """
+
     standard_match = _LOG_LINE_RE.match(line)
     if standard_match is not None:
         subsystem, code = _parse_tag(standard_match.group("tag"))
