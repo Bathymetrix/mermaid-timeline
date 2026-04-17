@@ -1,3 +1,7 @@
+[![Tests](https://github.com/Bathymetrix/mermaid-records/actions/workflows/ci.yml/badge.svg)](https://github.com/Bathymetrix/mermaid-records/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://pypi.org/project/mermaid-records/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+
 # mermaid-records
 
 `mermaid-records` normalizes raw MERMAID `BIN`, `LOG`, and `MER` artifacts into structured JSONL record families without introducing interpretation.
