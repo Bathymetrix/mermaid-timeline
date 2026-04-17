@@ -662,6 +662,121 @@ def test_write_log_jsonl_prototypes_broadens_transmission_classification_conserv
     }
 
 
+def test_write_log_jsonl_prototypes_classifies_wrapped_tagged_transmission_lines(
+    tmp_path: Path,
+) -> None:
+    log_path = tmp_path / "0700_wrapped.LOG"
+    log_path.write_text(
+        "\n".join(
+            [
+                "1700000000:<ERR>[ZTX   ,472]peer ask to resume 0048/607503A2.MER (118847bytes) from byte 4294967294",
+                "1700000001:<WRN>[SURF  ,0069]transfer interrupted , retry",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "jsonl"
+    summary = write_log_jsonl_prototypes([log_path], output_dir)
+
+    operational_records = _read_jsonl(output_dir / "log_operational_records.jsonl")
+    transmission_records = _read_jsonl(output_dir / "log_transmission_records.jsonl")
+    unclassified_records = _read_jsonl(output_dir / "log_unclassified_records.jsonl")
+
+    assert summary.operational_records == 2
+    assert summary.transmission_records == 2
+    assert summary.unclassified_records == 0
+    assert [record["transmission_kind"] for record in transmission_records] == [
+        "upload_resume",
+        "upload_retry",
+    ]
+    assert transmission_records[0]["referenced_artifact"] == "0048_607503A2.MER"
+    assert transmission_records[0]["artifact_size_bytes"] == 118847
+    assert transmission_records[0]["byte_offset"] == 4294967294
+    assert operational_records[0]["severity"] == "err"
+    assert operational_records[1]["severity"] == "warn"
+    assert operational_records[1]["message"] == "<WRN>transfer interrupted , retry"
+    assert unclassified_records == []
+
+
+def test_write_log_jsonl_prototypes_routes_wrapped_nonfamily_lines_to_unclassified(
+    tmp_path: Path,
+) -> None:
+    log_path = tmp_path / "0700_wrapped_unclassified.LOG"
+    log_path.write_text(
+        "\n".join(
+            [
+                "1700000000:<ERR>[MODEM ,0347]ping error",
+                "1700000001:<WRN>[SURF  ,0056]peer mute",
+                "1700000002:<WARN>[MAIN  ,0041]mission empty",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "jsonl"
+    malformed_log_lines: list[dict[str, object]] = []
+    summary = write_log_jsonl_prototypes(
+        [log_path],
+        output_dir,
+        run_id="run-wrapped-unclassified",
+        malformed_log_lines=malformed_log_lines,
+    )
+
+    operational_records = _read_jsonl(output_dir / "log_operational_records.jsonl")
+    unclassified_records = _read_jsonl(output_dir / "log_unclassified_records.jsonl")
+
+    assert summary.operational_records == 3
+    assert summary.unclassified_records == 3
+    assert summary.transmission_records == 0
+    assert malformed_log_lines == []
+    assert [record["message"] for record in unclassified_records] == [
+        "<ERR>ping error",
+        "<WRN>peer mute",
+        "<WARN>mission empty",
+    ]
+    assert [record["severity"] for record in operational_records] == [
+        "err",
+        "warn",
+        "warn",
+    ]
+    assert all(record["unclassified_reason"] == "no_family_match" for record in unclassified_records)
+
+
+def test_write_log_jsonl_prototypes_keeps_true_unparsable_junk_malformed(
+    tmp_path: Path,
+) -> None:
+    log_path = tmp_path / "0700_bad.LOG"
+    log_path.write_text(
+        "\n".join(
+            [
+                "1700000000:<ERR>broken wrapper without subsystem tag",
+                "not even timestamped",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "jsonl"
+    malformed_log_lines: list[dict[str, object]] = []
+    summary = write_log_jsonl_prototypes(
+        [log_path],
+        output_dir,
+        run_id="run-malformed",
+        malformed_log_lines=malformed_log_lines,
+    )
+
+    assert summary.operational_records == 0
+    assert summary.unclassified_records == 0
+    assert [row["raw_line"] for row in malformed_log_lines] == [
+        "1700000000:<ERR>broken wrapper without subsystem tag",
+        "not even timestamped",
+    ]
+
+
 def _read_jsonl(path: Path) -> list[dict[str, object]]:
     with path.open("r", encoding="utf-8") as handle:
         return [json.loads(line) for line in handle if line.strip()]

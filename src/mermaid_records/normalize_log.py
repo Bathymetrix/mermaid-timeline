@@ -29,6 +29,9 @@ OUTPUT_FILENAMES = {
 }
 
 _LOG_LINE_RE = re.compile(r"^(?P<time>.+?):\[(?P<tag>[^\]]+)\](?P<message>.*)$")
+_WRAPPED_TAGGED_LOG_LINE_RE = re.compile(
+    r"^(?P<time>.+?):(?P<prefix><(?:ERR|WARN|WRN)>)\[(?P<tag>[^\]]+)\](?P<message>.*)$"
+)
 _TIMESTAMPED_LINE_RE = re.compile(r"^(?P<time>.+?):(?P<content>.*)$")
 _ROLLOVER_BANNER_RE = re.compile(
     r"^\*\*\*\s+switching to\s+(?P<target>.+?)\s+\*\*\*$",
@@ -156,6 +159,14 @@ class _GroupedEpisode:
     family: str
     episode_index: int
     lines: list[_GroupedEpisodeLine]
+
+
+@dataclass(slots=True)
+class _ParsedTaggedLogLine:
+    time_text: str
+    subsystem: str
+    code: str | None
+    message: str
 
 
 def _common_log_record_fields(
@@ -467,23 +478,23 @@ def _iter_log_source_units(
                     yield episode
                 continue
 
-            tagged_match = _LOG_LINE_RE.match(line)
+            tagged_line = _parse_tagged_log_line(line)
             if current_episode is not None and current_episode.family == "testmode":
                 current_episode.lines.append(
                     _grouped_line(
                         line_number=line_number,
                         raw_line=line,
-                        tagged_match=tagged_match,
+                        tagged_line=tagged_line,
                     )
                 )
-                if tagged_match is not None and _is_testmode_exit_line(tagged_match):
+                if tagged_line is not None and _is_testmode_exit_line(tagged_line):
                     episode = _flush_episode()
                     if episode is not None:
                         yield episode
                 continue
 
-            if tagged_match is not None:
-                if _is_testmode_start_line(tagged_match):
+            if tagged_line is not None:
+                if _is_testmode_start_line(tagged_line):
                     episode = _flush_episode()
                     if episode is not None:
                         yield episode
@@ -493,16 +504,16 @@ def _iter_log_source_units(
                         _grouped_line(
                             line_number=line_number,
                             raw_line=line,
-                            tagged_match=tagged_match,
+                            tagged_line=tagged_line,
                         )
                     )
-                    if _is_testmode_exit_line(tagged_match):
+                    if _is_testmode_exit_line(tagged_line):
                         episode = _flush_episode()
                         if episode is not None:
                             yield episode
                     continue
 
-                if _is_sbe_start_or_continue_line(tagged_match, active_episode=current_episode):
+                if _is_sbe_start_or_continue_line(tagged_line, active_episode=current_episode):
                     if current_episode is None or current_episode.family != "sbe":
                         episode = _flush_episode()
                         if episode is not None:
@@ -513,7 +524,7 @@ def _iter_log_source_units(
                         _grouped_line(
                             line_number=line_number,
                             raw_line=line,
-                            tagged_match=tagged_match,
+                            tagged_line=tagged_line,
                         )
                     )
                     continue
@@ -522,13 +533,11 @@ def _iter_log_source_units(
                 if episode is not None:
                     yield episode
                 try:
-                    tag = tagged_match.group("tag")
-                    subsystem, code = _parse_tag(tag)
                     yield OperationalLogEntry(
-                        time=_parse_time_text(tagged_match.group("time")),
-                        subsystem=subsystem,
-                        code=code,
-                        message=tagged_match.group("message"),
+                        time=_parse_time_text(tagged_line.time_text),
+                        subsystem=tagged_line.subsystem,
+                        code=tagged_line.code,
+                        message=tagged_line.message,
                         source_kind="log",
                         raw_line=line,
                         source_file=path,
@@ -594,10 +603,10 @@ def _grouped_line(
     *,
     line_number: int,
     raw_line: str,
-    tagged_match=None,
+    tagged_line: _ParsedTaggedLogLine | None = None,
 ) -> _GroupedEpisodeLine:
     raw_time: str | None
-    if tagged_match is None:
+    if tagged_line is None:
         timestamp_match = _TIMESTAMPED_LINE_RE.match(raw_line)
         if timestamp_match is None:
             return _GroupedEpisodeLine(
@@ -608,7 +617,7 @@ def _grouped_line(
             )
         raw_time = timestamp_match.group("time")
     else:
-        raw_time = tagged_match.group("time")
+        raw_time = tagged_line.time_text
     try:
         parsed_time = _parse_time_text(raw_time)
     except ValueError:
@@ -651,15 +660,13 @@ def _build_grouped_episode_record(
     }
 
 
-def _is_testmode_start_line(tagged_match) -> bool:
-    subsystem, _code = _parse_tag(tagged_match.group("tag"))
-    return subsystem == "TESTMD"
+def _is_testmode_start_line(tagged_line: _ParsedTaggedLogLine) -> bool:
+    return tagged_line.subsystem == "TESTMD"
 
 
-def _is_testmode_exit_line(tagged_match) -> bool:
-    subsystem, _code = _parse_tag(tagged_match.group("tag"))
-    message = tagged_match.group("message").strip().lower()
-    if subsystem == "TESTMD" and message in {'"q"', '"quit"'}:
+def _is_testmode_exit_line(tagged_line: _ParsedTaggedLogLine) -> bool:
+    message = tagged_line.message.strip().lower()
+    if tagged_line.subsystem == "TESTMD" and message in {'"q"', '"quit"'}:
         return True
     return message in {
         "end of test mode",
@@ -668,13 +675,15 @@ def _is_testmode_exit_line(tagged_match) -> bool:
     } or message.startswith("rebooting with code")
 
 
-def _is_sbe_start_or_continue_line(tagged_match, *, active_episode: _GroupedEpisode | None) -> bool:
-    subsystem, _code = _parse_tag(tagged_match.group("tag"))
-    message = tagged_match.group("message")
-    if subsystem in {"SBE", "SBE41", "SBE61", "PROFIL"}:
+def _is_sbe_start_or_continue_line(
+    tagged_line: _ParsedTaggedLogLine,
+    *,
+    active_episode: _GroupedEpisode | None,
+) -> bool:
+    if tagged_line.subsystem in {"SBE", "SBE41", "SBE61", "PROFIL"}:
         return True
-    if subsystem == "STAGE":
-        if "SBE41" in message or "SBE61" in message:
+    if tagged_line.subsystem == "STAGE":
+        if "SBE41" in tagged_line.message or "SBE61" in tagged_line.message:
             return True
         return active_episode is not None and active_episode.family == "sbe"
     return False
@@ -685,6 +694,30 @@ def _parse_tag(tag: str) -> tuple[str, str | None]:
         return tag.strip(), None
     subsystem, code = tag.split(",", maxsplit=1)
     return subsystem.strip(), code.strip() or None
+
+
+def _parse_tagged_log_line(line: str) -> _ParsedTaggedLogLine | None:
+    standard_match = _LOG_LINE_RE.match(line)
+    if standard_match is not None:
+        subsystem, code = _parse_tag(standard_match.group("tag"))
+        return _ParsedTaggedLogLine(
+            time_text=standard_match.group("time"),
+            subsystem=subsystem,
+            code=code,
+            message=standard_match.group("message"),
+        )
+
+    wrapped_match = _WRAPPED_TAGGED_LOG_LINE_RE.match(line)
+    if wrapped_match is None:
+        return None
+
+    subsystem, code = _parse_tag(wrapped_match.group("tag"))
+    return _ParsedTaggedLogLine(
+        time_text=wrapped_match.group("time"),
+        subsystem=subsystem,
+        code=code,
+        message=f"{wrapped_match.group('prefix')}{wrapped_match.group('message')}",
+    )
 
 
 def _validate_log_path(path: Path) -> None:
@@ -740,7 +773,7 @@ def _message_kind(
 def _severity(message: str) -> str | None:
     if "<ERR>" in message:
         return "err"
-    if "<WARN>" in message:
+    if "<WARN>" in message or "<WRN>" in message:
         return "warn"
     return None
 
