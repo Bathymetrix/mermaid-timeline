@@ -97,8 +97,11 @@ That rewrite-only `stateless` contract is the safety mechanism that prevents sil
 ## Manifest and preflight artifacts
 
 - `manifests/` and `state/` are stateful-only
-- `preflight_status.json` is written only when BIN decode preflight runs with a durable instrument output directory
+- `preflight_status.json` is written only when the current run performs BIN decode preflight with a durable instrument output directory
 - `preflight_status.json` can therefore appear in either execution mode if the run actually performs BIN-backed normalization with decoder preflight
+- in `stateful` mode, `manifests/latest.json` includes `preflight_status` only when the current run produced that artifact
+- when no preflight runs, `manifests/latest.json` omits `preflight_status` rather than storing `null`
+- stale preflight artifacts from earlier runs are cleared before a new run is recorded
 - dry-run writes none of these artifacts in either mode
 
 ## Safe stateless example

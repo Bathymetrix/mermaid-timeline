@@ -18,7 +18,9 @@ Stateless mode:
 - does not persist malformed/skipped-source recovery artifacts separately from the normalized JSONL outputs
 - cannot target an output tree that already contains `manifests/`
 
-`preflight_status.json` is different from manifests: it is written only when BIN decode preflight runs with a durable instrument output directory, regardless of whether the run is stateful or stateless.
+`preflight_status.json` is different from manifests: it is written only when the current run performs BIN decode preflight with a durable instrument output directory, regardless of whether the run is stateful or stateless.
+
+In `stateful` mode, `manifests/latest.json` includes `preflight_status` only for runs that produced that artifact. When no preflight runs, the field is absent rather than `null`, and stale preflight artifacts from earlier runs must not be propagated.
 
 ## MER event preservation is structured, not verbatim
 

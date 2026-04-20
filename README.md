@@ -61,7 +61,9 @@ The normalize CLI supports:
 
 That `stateless` rewrite contract is intentional: rerunning the same explicit `--input-file` set does not silently duplicate JSONL rows.
 
-When BIN decode preflight runs with a durable instrument output directory, the run writes `preflight_status.json` at instrument root. This is tied to BIN decode, not to `stateful` mode by itself.
+When BIN decode preflight runs with a durable instrument output directory, the current run writes `preflight_status.json` at instrument root. This is tied to BIN decode, not to `stateful` mode by itself.
+
+In `stateful` mode, `manifests/latest.json` includes `preflight_status` only when the current run produced that artifact. When no preflight runs, the field is absent rather than `null`, and stale preflight artifacts from earlier runs are not carried forward.
 
 ## Output layout
 
@@ -86,7 +88,7 @@ Typical per-instrument outputs look like:
     mer_parameter_records.jsonl
     manifests/              # stateful mode only
     state/                  # stateful mode only
-    preflight_status.json   # only when BIN decode preflight ran
+    preflight_status.json   # only when the current run's BIN decode preflight ran
 ```
 
 Every per-instrument output directory materializes the canonical top-level JSONL file set even when some families are empty.

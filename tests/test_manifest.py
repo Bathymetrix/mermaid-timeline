@@ -381,6 +381,47 @@ def test_decoder_state_tolerates_database_file_removed_after_listing(
     assert source_state["decoder_state"]["database_bundle_hash"] is not None
 
 
+def test_stateful_non_bin_rerun_does_not_inherit_stale_preflight_status(tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir()
+    (input_root / "467.174-T-0100.vit").write_text("", encoding="utf-8")
+    bin_path = input_root / "0100_first.BIN"
+    bin_path.write_bytes(b"raw-bin")
+
+    decoder = _write_decoder(tmp_path / "decoder.py", "decoded")
+    output_root = tmp_path / "output"
+
+    run_normalization_pipeline(
+        input_root,
+        output_dir=output_root,
+        config=Bin2LogConfig(
+            python_executable=Path(sys.executable),
+            decoder_script=decoder,
+        ),
+    )
+
+    instrument_dir = output_root / "467.174-T-0100"
+    first_latest = _read_json(instrument_dir / "manifests" / "latest.json")
+
+    assert first_latest["preflight_status"] == (
+        f"manifests/runs/{first_latest['run_id']}/preflight_status.json"
+    )
+    assert (instrument_dir / "preflight_status.json").exists()
+    assert (instrument_dir / first_latest["preflight_status"]).exists()
+
+    bin_path.unlink()
+    _write_log(input_root / "0100_second.LOG", "second")
+
+    run_normalization_pipeline(input_root, output_dir=output_root)
+
+    second_latest = _read_json(instrument_dir / "manifests" / "latest.json")
+    second_run_dir = instrument_dir / "manifests" / "runs" / second_latest["run_id"]
+
+    assert not (instrument_dir / "preflight_status.json").exists()
+    assert "preflight_status" not in second_latest
+    assert not (second_run_dir / "preflight_status.json").exists()
+
+
 def test_stateless_mode_isolated_and_rejects_existing_manifests(tmp_path: Path) -> None:
     input_root = tmp_path / "inputs"
     input_root.mkdir()

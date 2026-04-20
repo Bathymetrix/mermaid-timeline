@@ -34,6 +34,7 @@ def test_readme_documents_release_cli_contract() -> None:
     assert "stateful mode" in readme
     assert "stateless mode" in readme
     assert "preflight_status.json" in readme
+    assert "the field is absent rather than `null`" in readme
     assert "does not silently duplicate JSONL rows" in readme
 
 
@@ -46,6 +47,7 @@ def test_cli_docs_capture_current_mode_and_flag_contract() -> None:
     assert "state/" in cli_doc
     assert "preflight_status.json" in cli_doc
     assert "can therefore appear in either execution mode" in cli_doc
+    assert "omits `preflight_status` rather than storing `null`" in cli_doc
     assert "safe to rerun because stateless mode rewrites the targeted output families" in cli_doc
 
 
@@ -57,6 +59,7 @@ def test_limitations_doc_matches_current_preservation_and_mode_rules() -> None:
     assert "writes no `manifests/`" in limitations
     assert "writes no `state/`" in limitations
     assert "preflight_status.json" in limitations
+    assert "the field is absent rather than `null`" in limitations
     assert "raw_format_line = null" in limitations
     assert "payload byte counts measure only the bytes inside `<DATA>...</DATA>`" in limitations
     assert "reruns do not silently duplicate rows" in limitations

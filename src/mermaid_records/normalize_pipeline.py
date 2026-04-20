@@ -291,6 +291,7 @@ def _run_stateful(
             instrument_output_dir=plan.instrument_output_dir,
             include_state_files=True,
         )
+        _reset_preflight_status(plan.instrument_output_dir)
 
         record_pruned_sources(
             instrument_output_dir=plan.instrument_output_dir,
@@ -482,6 +483,7 @@ def _run_stateless(
             instrument_output_dir=instrument_output_dir,
             include_state_files=False,
         )
+        _reset_preflight_status(instrument_output_dir)
         malformed_log_lines: list[dict[str, object]] = []
         skipped_log_files: list[dict[str, object]] = []
         malformed_mer_blocks: list[dict[str, object]] = []
@@ -708,6 +710,12 @@ def _remove_paths(paths: list[Path]) -> None:
     for path in paths:
         if path.exists():
             path.unlink()
+
+
+def _reset_preflight_status(instrument_output_dir: Path) -> None:
+    preflight_status_path = instrument_output_dir / "preflight_status.json"
+    if preflight_status_path.exists():
+        preflight_status_path.unlink()
 
 
 def _remove_package_owned_outputs(instrument_output_dir: Path) -> None:

@@ -100,7 +100,7 @@ BIN decode preflight has exactly two requested modes:
   - live `database_update(...)` refresh is still attempted
   - refresh failure may continue in degraded cached mode
 
-When BIN decode preflight runs with a durable output directory, `preflight_status.json` records:
+When the current run performs BIN decode preflight with a durable output directory, `preflight_status.json` records:
 
 - requested mode
 - effective mode
@@ -141,7 +141,7 @@ Per instrument:
   mer_environment_records.jsonl
   mer_parameter_records.jsonl
   mer_event_records.jsonl
-  preflight_status.json  # only when BIN decode preflight ran
+  preflight_status.json  # only when the current run's BIN decode preflight ran
   manifests/
     latest.json
     runs/
@@ -163,8 +163,11 @@ Notes:
 
 - JSONL field ordering is frozen semantically: provenance/identity, then time, then family metadata, then payload/accounting, then raw fallback fields.
 - `manifests/` and `state/` are stateful-mode artifacts; stateless mode writes neither.
-- `preflight_status.json` at instrument root is present only when BIN preflight ran with a durable output directory.
+- `preflight_status.json` at instrument root is present only when the current run performed BIN preflight with a durable output directory.
 - `latest.json` points to the most recent run for that instrument.
+- `latest.json` includes `preflight_status` only when the current run produced that artifact.
+- When no preflight runs, `latest.json` omits `preflight_status` rather than storing `null`.
+- Stale preflight artifacts from earlier runs must not be propagated to a new run.
 - `run.json` stores run metadata and status.
 - `outputs.json` stores output inventory and row counts.
 - `source_state.json` stores raw source identity and decoder-state identity.
@@ -369,7 +372,7 @@ Shared MER provenance fields:
 - `run_manifest`
 - `outputs_manifest`
 - `source_state_manifest`
-- `preflight_status`
+- `preflight_status` when the current run produced `preflight_status.json`
 
 `manifests/runs/<run_id>/run.json`
 

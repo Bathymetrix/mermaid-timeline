@@ -258,6 +258,7 @@ Avoid:
 - Normalized JSONL outputs should use basename-only `source_file`; richer full-path provenance belongs in manifests and other run-side artifacts.
 - Do not mutate existing JSONL outputs in place; append and full rewrite are the only safe modification paths.
 - `--force-rewrite` must remove package-owned generated artifacts for each targeted instrument before regeneration: all top-level `log_*.jsonl`, all top-level `mer_*.jsonl`, and package-owned bookkeeping under `manifests/` and `state/`. Do not delete unknown files or the whole instrument directory.
+- `preflight_status.json` is run-scoped bookkeeping: clear stale root artifacts before each real run, and include `preflight_status` in `manifests/latest.json` only when the current run produced that artifact. When no preflight runs, omit the field rather than storing `null`.
 - Every per-instrument output directory must materialize the canonical output file set even when some families are empty. At minimum this means all top-level LOG and MER JSONL family files must exist as empty files when they have no records; in `stateful` mode also keep the state/manifest scaffold present for that instrument, while `stateless` mode still must not create manifests.
 - Future dry-run/report behavior must be completely side-effect free, including no file writes of any kind.
 - Persisted `manifests/runs/<run_id>/input_file_diffs.jsonl` is a strict raw input diff log: file-level fields only, no append/rewrite/noop semantics, and no standalone non-file invalidation records.

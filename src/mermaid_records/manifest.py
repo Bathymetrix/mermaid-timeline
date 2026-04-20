@@ -86,9 +86,10 @@ def finalize_instrument_run(
     _write_jsonl(run_dir / "malformed_mer_blocks.jsonl", malformed_mer_blocks or [])
     _write_jsonl(run_dir / "skipped_mer_files.jsonl", skipped_mer_files or [])
 
+    preflight_run_path = run_dir / "preflight_status.json"
     preflight_root = instrument_output_dir / "preflight_status.json"
     if preflight_root.exists():
-        (run_dir / "preflight_status.json").write_text(
+        preflight_run_path.write_text(
             preflight_root.read_text(encoding="utf-8"),
             encoding="utf-8",
         )
@@ -103,12 +104,11 @@ def finalize_instrument_run(
         "source_state_manifest": (
             (run_dir / "source_state.json").relative_to(instrument_output_dir).as_posix()
         ),
-        "preflight_status": (
-            (run_dir / "preflight_status.json").relative_to(instrument_output_dir).as_posix()
-            if (run_dir / "preflight_status.json").exists()
-            else None
-        ),
     }
+    if preflight_run_path.exists():
+        latest_json["preflight_status"] = preflight_run_path.relative_to(
+            instrument_output_dir
+        ).as_posix()
     manifests_root.mkdir(parents=True, exist_ok=True)
     _write_json(manifests_root / "latest.json", latest_json)
 
