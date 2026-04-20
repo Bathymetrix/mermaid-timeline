@@ -2,7 +2,7 @@
 
 ## Manifest and state artifacts depend on mode
 
-Stateful and stateless runs do not persist the same side artifacts.
+`Stateful` and `stateless` runs do not persist the same side artifacts.
 
 Stateful mode:
 
@@ -52,9 +52,9 @@ No additional interpretation-oriented transformations are part of the v1 contrac
 
 ## Mode-specific rerun limits
 
-Stateful mode can append, rewrite, noop, and prune because it has persisted source state.
+`Stateful` mode can append, rewrite, noop, and prune because it has persisted source state.
 
-Stateless mode cannot do that safely because it has no manifests. Its rerun contract is therefore intentionally narrower:
+`Stateless` mode cannot do that safely because it has no manifests. Its rerun contract is therefore intentionally narrower:
 
 - reruns rewrite the targeted package-owned family outputs
 - reruns do not append to prior stateless JSONL files

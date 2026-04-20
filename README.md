@@ -4,7 +4,7 @@
 
 # mermaid-records
 
-`mermaid-records` normalizes raw MERMAID `BIN`, `LOG`, and `MER` artifacts into structured JSONL record families. It is a parsing and normalization layer only: it does not do coordinate conversion, interval inference, waveform analysis, or higher-level interpretation.
+`mermaid-records` normalizes raw MERMAID `BIN`, `LOG`, and `MER` artifacts into structured JSONL record families. It is a parsing and normalization layer only. It does not perform coordinate conversion, interval inference, waveform analysis, or higher-level interpretation.
 
 ## v1 contract
 
@@ -13,7 +13,7 @@ The release-facing v1 contract is intentionally narrow:
 - supported raw inputs are `BIN`, `LOG`, and `MER`
 - the installed CLI surface is `mermaid-records normalize`
 - the package-root Python API is metadata-only (`mermaid_records.__version__`, authorship, and license metadata)
-- normalized JSONL outputs are the primary supported product
+- normalized JSONL outputs are the primary supported output
 
 `BIN` handling still depends on an external decoder step that produces `LOG` content. `mermaid-records` owns normalization around that seam; it does not reimplement the manufacturer decoder.
 
@@ -31,7 +31,7 @@ python -m pip install -e .[dev]
 
 ## Canonical CLI example
 
-This example is fixture-backed and does not require the external BIN decoder:
+Fixture-backed example; this command does not require the external BIN decoder:
 
 ```bash
 mermaid-records normalize \
@@ -41,27 +41,27 @@ mermaid-records normalize \
 
 The normalize CLI supports:
 
-- `--input-root` for stateful mode
-- `--input-file` for stateless mode
+- `--input-root` for `stateful mode`
+- `--input-file` for `stateless mode`
 - `--dry-run`
 - `--json` for structured dry-run output only; it requires `--dry-run`
 - `--verbose` / `-v`
 - `--preflight-mode {strict,cached}` for BIN-backed runs
 
-`--output-dir` may be omitted only when `MERMAID` is set, in which case the CLI resolves the output root to `$MERMAID/records`.
+`--output-dir` may be omitted only when `MERMAID` is set. In that case, the CLI resolves the output root to `$MERMAID/records`.
 
 ## Execution modes
 
 `mermaid-records normalize` has two execution modes:
 
-- `stateful mode` is selected by `--input-root`
-- `stateless mode` is selected by `--input-file`
+- `stateful` mode is selected by `--input-root`
+- `stateless` mode is selected by `--input-file`
 
-Stateful mode persists `manifests/` and `state/` per instrument and enables incremental append/rewrite/noop planning. Stateless mode does not write manifests, does not use incremental state, and rewrites the targeted package-owned JSONL family outputs for each explicit run.
+`Stateful` mode persists `manifests/` and `state/` per instrument and enables incremental append/rewrite/noop planning. `Stateless` mode does not write manifests, does not use incremental state, and rewrites the targeted package-owned JSONL family outputs for each explicit run.
 
-That stateless rewrite contract is intentional: rerunning the same explicit `--input-file` set does not silently duplicate JSONL rows.
+That `stateless` rewrite contract is intentional: rerunning the same explicit `--input-file` set does not silently duplicate JSONL rows.
 
-When BIN decode preflight runs with a durable instrument output directory, the run writes `preflight_status.json` at instrument root. This is tied to BIN decode, not to stateful mode by itself.
+When BIN decode preflight runs with a durable instrument output directory, the run writes `preflight_status.json` at instrument root. This is tied to BIN decode, not to `stateful` mode by itself.
 
 ## Output layout
 
@@ -99,7 +99,7 @@ The release-facing fixtures intentionally cover a few concrete float/data classe
 - `465.152-R-0001`: compact real PSD / Stanford-style raw `BIN` + `MER` subset, including a metadata-only `MER` and an event-bearing `MER` with no `<FORMAT>` lines
 - `467.174-T-0100`: BIN-backed family with tracked raw `BIN`, decoded `LOG`, raw `MER`, and `S61` fixture branches
 
-These fixtures are representative test anchors for the implemented v1 behavior. They are not a claim that every float generation, record family variant, or decoder edge case is covered.
+These fixtures are representative test anchors for the implemented v1 behavior. They do not claim coverage for every float generation, record family variant, or decoder edge case.
 
 ## Python API posture
 

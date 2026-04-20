@@ -4,7 +4,7 @@
 
 `mermaid-records` is a normalization layer, not an interpretation or analysis layer.
 
-Its role is to transform raw MERMAID artifacts into stable, machine-readable records without introducing higher-level meaning. It should expose structure, not infer it.
+Its role is to transform raw MERMAID artifacts into stable, machine-readable records without introducing higher-level meaning. It should expose structure, not infer meaning.
 
 ## Design goals
 
@@ -39,7 +39,7 @@ Changes should mainly be driven by:
 - correctness fixes
 - clearly exposed shortcomings in baseline normalization
 
-Changes should **not** be driven by pressure to add interpretation or convenience derivations here.
+Changes should **not** be driven by pressure to add interpretation or convenience derivations to this layer.
 
 ## Philosophy
 

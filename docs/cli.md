@@ -8,7 +8,7 @@ The installed command is:
 mermaid-records normalize
 ```
 
-The `normalize` subcommand does not accept positional input/output paths. Mode selection and I/O are controlled by flags.
+The `normalize` subcommand does not accept positional input or output paths. Mode selection and I/O are controlled by flags.
 
 ## Required mode selector
 
@@ -19,7 +19,7 @@ Exactly one of these must be supplied:
   - recursively discovers supported raw inputs under the root
 - `--input-file <PATH ...>`
   - selects `stateless` mode
-  - accepts repeated uses plus comma-separated and/or space-separated file lists
+  - accepts repeated uses plus comma-separated or space-separated file lists
   - normalizes only the explicitly listed raw files
 
 Supported raw input types in v1 are `BIN`, `LOG`, and `MER`.
@@ -42,7 +42,7 @@ Supported raw input types in v1 are `BIN`, `LOG`, and `MER`.
 - `--preflight-mode {strict,cached}`
   - applies only when BIN inputs are present and decoder-backed BIN decode preflight runs
   - `strict`: live decoder database refresh failure is terminal
-  - `cached`: live refresh is still attempted, but an explicit degraded continuation is allowed after failure
+  - `cached`: live refresh is still attempted, but explicit degraded continuation is allowed after failure
 
 `--decoder-python` and `--decoder-script` must be provided together, either directly or through `MERMAID_RECORDS_DECODER_PYTHON` and `MERMAID_RECORDS_DECODER_SCRIPT`.
 
@@ -90,7 +90,7 @@ Behavior:
 - rejects any target output tree that already contains `manifests/`
 - rewrites the targeted package-owned JSONL family outputs on every real run
 
-That rewrite-only stateless contract is the safety mechanism that prevents silent duplication on reruns. If you rerun the same explicit file list, the targeted family outputs are regenerated rather than appended to.
+That rewrite-only `stateless` contract is the safety mechanism that prevents silent duplication on reruns. If you rerun the same explicit file list, the targeted family outputs are regenerated rather than appended to.
 
 `--force-rewrite` does not change the fundamental stateless contract. It still does not enable manifests or incremental state; it only keeps cleanup behavior explicit for targeted package-owned outputs.
 
@@ -103,7 +103,7 @@ That rewrite-only stateless contract is the safety mechanism that prevents silen
 
 ## Safe stateless example
 
-This example is fixture-backed, decoder-free, and safe to rerun because stateless mode rewrites the targeted output families:
+Fixture-backed example; decoder-free and safe to rerun because stateless mode rewrites the targeted output families:
 
 ```bash
 mermaid-records normalize \
