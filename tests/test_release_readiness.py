@@ -29,9 +29,37 @@ def test_readme_documents_release_cli_contract() -> None:
     assert "--input-root" in readme
     assert "--input-file" in readme
     assert "--dry-run" in readme
+    assert "--json" in readme
+    assert "--preflight-mode {strict,cached}" in readme
     assert "stateful mode" in readme
     assert "stateless mode" in readme
     assert "preflight_status.json" in readme
+    assert "does not silently duplicate JSONL rows" in readme
+
+
+def test_cli_docs_capture_current_mode_and_flag_contract() -> None:
+    cli_doc = (REPO_ROOT / "docs/cli.md").read_text(encoding="utf-8")
+
+    assert "--json requires --dry-run" in cli_doc
+    assert "--preflight-mode {strict,cached}" in cli_doc
+    assert "manifests/" in cli_doc
+    assert "state/" in cli_doc
+    assert "preflight_status.json" in cli_doc
+    assert "can therefore appear in either execution mode" in cli_doc
+    assert "safe to rerun because stateless mode rewrites the targeted output families" in cli_doc
+
+
+def test_limitations_doc_matches_current_preservation_and_mode_rules() -> None:
+    limitations = (REPO_ROOT / "docs/limitations.md").read_text(encoding="utf-8")
+
+    assert "Stateful mode:" in limitations
+    assert "Stateless mode:" in limitations
+    assert "writes no `manifests/`" in limitations
+    assert "writes no `state/`" in limitations
+    assert "preflight_status.json" in limitations
+    assert "raw_format_line = null" in limitations
+    assert "payload byte counts measure only the bytes inside `<DATA>...</DATA>`" in limitations
+    assert "reruns do not silently duplicate rows" in limitations
 
 
 def test_readme_lists_release_facing_fixture_families() -> None:

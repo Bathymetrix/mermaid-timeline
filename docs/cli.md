@@ -8,99 +8,119 @@ The installed command is:
 mermaid-records normalize
 ```
 
-The normalize subcommand does **not** use positional `<input> <output>` arguments.
+The `normalize` subcommand does not accept positional input/output paths. Mode selection and I/O are controlled by flags.
 
-## Inputs and outputs
+## Required mode selector
 
-Normalization is driven through explicit flags.
+Exactly one of these must be supplied:
 
-Typical forms are:
+- `-i`, `--input-root <PATH>`
+  - selects `stateful` mode
+  - recursively discovers supported raw inputs under the root
+- `--input-file <PATH ...>`
+  - selects `stateless` mode
+  - accepts repeated uses plus comma-separated and/or space-separated file lists
+  - normalizes only the explicitly listed raw files
 
-```bash
-mermaid-records normalize --input-root <INPUT_ROOT> --output-dir <OUTPUT_DIR>
-```
+Supported raw input types in v1 are `BIN`, `LOG`, and `MER`.
 
-or, for targeted runs:
+## Output resolution
 
-```bash
-mermaid-records normalize --input-file <INPUT_FILE> --output-dir <OUTPUT_DIR>
-```
+- `-o`, `--output-dir <PATH>`
+  - explicit output root for normalized records
+- when `--output-dir` is omitted and `MERMAID` is set
+  - the CLI uses `$MERMAID/records`
+- when neither is available
+  - the CLI exits with an error
 
-Supported normalize flags currently are:
+## Decoder and preflight flags
 
-- `--input-root`
-- `--input-file`
-- `--output-dir`
-- `--decoder-python`
-- `--decoder-script`
+- `--decoder-python <PATH>`
+  - Python executable for the external decoder environment
+- `--decoder-script <PATH>`
+  - path to the external `preprocess.py`
 - `--preflight-mode {strict,cached}`
+  - applies only when BIN inputs are present and decoder-backed BIN decode preflight runs
+  - `strict`: live decoder database refresh failure is terminal
+  - `cached`: live refresh is still attempted, but an explicit degraded continuation is allowed after failure
+
+`--decoder-python` and `--decoder-script` must be provided together, either directly or through `MERMAID_RECORDS_DECODER_PYTHON` and `MERMAID_RECORDS_DECODER_SCRIPT`.
+
+## Planning and reporting flags
+
 - `--dry-run`
+  - computes the normalization plan and file-level diffs without writing files
+- `--json`
+  - prints structured dry-run output instead of the human-readable summary
+  - dry-run only
+  - the CLI rejects `--json` without `--dry-run` with `--json requires --dry-run`
 - `--force-rewrite`
-- `--json` (requires `--dry-run`)
-- `--verbose` / `-v`
-
-`--output-dir` is optional only when the `MERMAID` environment variable is set, in which case the CLI resolves the output directory to `$MERMAID/records`.
-
-`--json` is valid only with `--dry-run`. The CLI exits early with `--json requires --dry-run` for any other combination.
+  - forces targeted family rewrites instead of append/noop incremental decisions
+  - removes package-owned generated artifacts for each targeted instrument before regeneration
+- `-v`, `--verbose`
+  - prints an expanded end-of-run summary
+  - does not change normalization behavior
 
 ## Execution modes
 
-The CLI has two important behavioral modes:
+### Stateful mode
 
-- **stateful mode** — selected by `--input-root`; writes normalization bookkeeping and manifests
-- **stateless mode** — selected by `--input-file`; performs normalization without manifest persistence
+Stateful mode is selected by `--input-root`.
 
-This distinction matters for:
+Behavior:
 
-- whether `manifests/` and `state/` exist
-- whether `preflight_status.json` can exist
-- whether malformed/non-normalizable content is persisted in manifest artifacts
-- how rewrite/bookkeeping behavior should be interpreted
+- persists `manifests/` and `state/` under each targeted instrument directory
+- enables incremental append/rewrite/noop planning
+- records file-level diffs in `manifests/runs/<run_id>/input_file_diffs.jsonl`
+- records malformed/skipped-source recovery artifacts in per-run manifest files
+- records removed-source observations in `state/pruned_records.jsonl`
+- creates a fresh manifest `run_id` for every executed run, even on immediate reruns
 
-If you are documenting or debugging normalization results, always keep the selected execution mode in mind.
+Stateful mode is the only mode that uses persisted manifests to decide later append, rewrite, noop, and pruning behavior.
 
-Stateless mode is rewrite-only in v1 for the targeted instrument outputs. Because stateless runs do not persist manifests or incremental state, rerunning the same explicit inputs rewrites the package-owned JSONL families instead of appending to them.
+### Stateless mode
 
-## Output families
+Stateless mode is selected by `--input-file`.
 
-Typical per-instrument outputs include LOG and MER JSONL families such as:
+Behavior:
 
-- `log_acquisition_records.jsonl`
-- `log_ascent_request_records.jsonl`
-- `log_battery_records.jsonl`
-- `log_gps_records.jsonl`
-- `log_operational_records.jsonl`
-- `log_parameter_records.jsonl`
-- `log_pressure_temperature_records.jsonl`
-- `log_sbe_records.jsonl`
-- `log_testmode_records.jsonl`
-- `log_transmission_records.jsonl`
-- `log_unclassified_records.jsonl`
-- `mer_environment_records.jsonl`
-- `mer_event_records.jsonl`
-- `mer_parameter_records.jsonl`
+- does not write `manifests/`
+- does not write `state/`
+- does not use persisted incremental state
+- rejects any target output tree that already contains `manifests/`
+- rewrites the targeted package-owned JSONL family outputs on every real run
 
-Stateful runs materialize:
+That rewrite-only stateless contract is the safety mechanism that prevents silent duplication on reruns. If you rerun the same explicit file list, the targeted family outputs are regenerated rather than appended to.
 
-- `manifests/`
-- `state/`
+`--force-rewrite` does not change the fundamental stateless contract. It still does not enable manifests or incremental state; it only keeps cleanup behavior explicit for targeted package-owned outputs.
 
-Additionally:
+## Manifest and preflight artifacts
 
-- `preflight_status.json` is written at instrument root only when BIN decode preflight runs with a durable output directory
-- stateless runs do not write `manifests/`, `state/`, or `preflight_status.json`
+- `manifests/` and `state/` are stateful-only
+- `preflight_status.json` is written only when BIN decode preflight runs with a durable instrument output directory
+- `preflight_status.json` can therefore appear in either execution mode if the run actually performs BIN-backed normalization with decoder preflight
+- dry-run writes none of these artifacts in either mode
 
-## Force rewrite
+## Safe stateless example
 
-`--force-rewrite` is a targeted regeneration mechanism.
+This example is fixture-backed, decoder-free, and safe to rerun because stateless mode rewrites the targeted output families:
 
-For the targeted instrument output directories, it removes package-owned generated artifacts before regeneration so that stale outputs from older layouts do not persist. It should be understood as instrument-scoped cleanup and rebuild, not global deletion of all outputs under the entire output root.
+```bash
+mermaid-records normalize \
+  --input-file \
+    data/fixtures/452.020-P-06/log/06_67C95E46.LOG \
+    data/fixtures/452.020-P-06/mer/06_67C95E38.MER \
+  --output-dir /tmp/mermaid-records-stateless
+```
 
-In stateless mode, `--force-rewrite` does not change the rerun contract: targeted instrument outputs already rewrite by default, and the flag still does not enable manifests or other stateful bookkeeping.
+On repeated runs against the same `/tmp/mermaid-records-stateless` target:
 
-## Operational guidance
+- the package-owned LOG and MER family outputs for instrument `P0006` are rewritten
+- rows from prior stateless runs are not silently duplicated
+- unknown non-package files in the instrument directory are preserved
 
-For authoritative behavioral details, including mode semantics and contract-level guarantees, pair this document with:
+## Related references
 
-- `docs/limitations.md`
-- `docs/notes/normalization_release_contract.md`
+- [README.md](../README.md) — release overview and canonical stateful example
+- [docs/limitations.md](limitations.md) — preservation limits and allowed transformations
+- [docs/notes/normalization_release_contract.md](notes/normalization_release_contract.md) — detailed behavioral contract

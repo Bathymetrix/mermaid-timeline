@@ -1,59 +1,75 @@
 # Limitations
 
-## MER event preservation
+## Manifest and state artifacts depend on mode
 
-MER event records do not preserve the full original `<EVENT>...</EVENT>` block verbatim.
+Stateful and stateless runs do not persist the same side artifacts.
 
-Instead, successful normalized event rows preserve structured components such as:
+Stateful mode:
+
+- writes `manifests/latest.json`
+- writes one unique `manifests/runs/<run_id>/...` directory per executed run
+- writes `state/pruned_records.jsonl`
+- persists malformed/skipped-source recovery artifacts in the per-run manifest directory
+
+Stateless mode:
+
+- writes no `manifests/`
+- writes no `state/`
+- does not persist malformed/skipped-source recovery artifacts separately from the normalized JSONL outputs
+- cannot target an output tree that already contains `manifests/`
+
+`preflight_status.json` is different from manifests: it is written only when BIN decode preflight runs with a durable instrument output directory, regardless of whether the run is stateful or stateless.
+
+## MER event preservation is structured, not verbatim
+
+MER event normalization does not preserve the full original `<EVENT>...</EVENT>` block as one byte-for-byte field.
+
+Successful normalized event rows preserve structured components instead:
 
 - `raw_info_line`
-- `raw_format_line`
-- encoded payload fields
+- `raw_format_line` when a `<FORMAT>` line exists
+- `encoded_payload`
+- payload accounting fields such as `encoded_payload_byte_count`, `data_payload_nbytes`, and `payload_length_matches_expected`
 
-This is sufficient for many downstream uses, but it is not byte-for-byte reconstruction of the full original event block.
+Important consequences:
 
-## JSONL versus manifests
+- downstream consumers should not expect exact reconstruction of the original event block from one stored verbatim field
+- Stanford PSD event blocks that omit `<FORMAT>` are still valid and normalize with `raw_format_line = null`
+- payload byte counts measure only the bytes inside `<DATA>...</DATA>` and exclude surrounding framing whitespace
 
-Normalized JSONL outputs contain valid structured records.
+## Allowed transformations in v1
 
-When stateful mode is enabled, malformed or non-normalizable content is also recorded in manifest-side audit outputs. In stateless mode, manifest outputs are not written, so malformed content is not persisted there as a separate artifact.
+Normalization is conservative, but it is not a raw byte dump. The following transformations are intentionally allowed:
 
-For this reason, documentation about malformed-content capture should always be read together with the execution mode described in `docs/cli.md`.
+- line-read newline normalization such as stripping trailing `\r\n`
+- canonicalizing parsed LOG/MER filename references by replacing `/` with `_`
+- canonicalizing parsed LOG rollover targets to normalized `.LOG` filenames
+- parsing source text into explicit structured fields without adding inferred interpretation
+- resolving canonical `instrument_id` values from recognized serial naming rules when available
+- materializing the canonical top-level JSONL file set as empty files when a family has no rows
 
-## Execution-mode effects
+No additional interpretation-oriented transformations are part of the v1 contract. In particular, the normalization layer does not do coordinate conversion, derived intervals, mission inference, or waveform interpretation.
 
-Some output structures and audit behaviors depend on execution mode.
+## Mode-specific rerun limits
 
-In particular:
+Stateful mode can append, rewrite, noop, and prune because it has persisted source state.
 
-- `manifests/` and `state/` are stateful-mode artifacts
-- stateless mode does not write manifests
-- rewrite and bookkeeping behavior should be interpreted in the context of the selected mode
+Stateless mode cannot do that safely because it has no manifests. Its rerun contract is therefore intentionally narrower:
 
-## Allowed transformations
+- reruns rewrite the targeted package-owned family outputs
+- reruns do not append to prior stateless JSONL files
+- reruns do not silently duplicate rows
 
-The following explicit transformations may occur during normalization:
+## Fixture-backed coverage is partial
 
-- trailing newline normalization (`\r\n` stripped during line reads)
-- artifact path canonicalization (`/` → `_`) where referenced filenames are normalized for stable output
-- minimal parsing required to expose structured fields
+The tracked release-facing fixtures exercise important current cases, including:
 
-No additional interpretation-oriented transformations are part of the v1 contract.
+- older-generation direct `LOG` + `MER` data
+- BIN-backed families with decoded `LOG` fixtures
+- compact real PSD / Stanford-style raw `MER` examples, including a metadata-only file and event blocks without `<FORMAT>`
 
-## Float and family variability
+They do not prove coverage for every float generation, every external decoder behavior, or every malformed raw artifact pattern seen in the field.
 
-Not every float emits every record family, and not every family populates every optional field.
+## External decoder boundary
 
-Examples include:
-
-- some floats populate `log_parameter_records.jsonl` as an empty file because no parameter episodes were present
-- `log_sbe_records.jsonl` may be present but empty depending on float/data generation
-- Stanford PSD MER events may be valid but intentionally sparse in scalar fields compared with acoustic MERMAID examples
-
-Such absence or sparsity is data dependent and does not by itself imply a normalization defect.
-
-## External decoder dependency
-
-`BIN` handling depends on an external preprocess/decode step that produces `LOG` artifacts.
-
-`mermaid-records` does not currently replace that decoder. Any operational limitations, environment assumptions, or failure modes associated with the external decoder remain outside the scope of this package's normalization contract.
+`BIN` handling still depends on an external preprocess/decode workflow. `mermaid-records` does not replace that decoder, and any decoder-environment failures, database update issues, or upstream decode differences remain outside the normalization layer itself.
