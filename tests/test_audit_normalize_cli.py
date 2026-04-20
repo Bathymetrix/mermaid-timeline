@@ -15,6 +15,7 @@ from mermaid_records._audit_normalize_cli import (
     build_input_scenarios,
     build_run_specs,
     discover_inputs,
+    expected_success,
     run_audit,
 )
 
@@ -125,6 +126,28 @@ def test_build_run_specs_propagates_mermaid_root_for_bin_cli_arg_runs(tmp_path: 
     assert cli_both.env_overrides["MERMAID"] == mermaid_root.as_posix()
     assert cli_both.expects_success is True
     assert env_both.seed_decoder_database is True
+
+
+def test_expected_success_rejects_json_without_dry_run() -> None:
+    assert (
+        expected_success(
+            has_bin=False,
+            output_mode="cli_arg",
+            decoder_choice=audit_normalize_cli.DecoderConfigChoice(
+                name="none",
+                cli_python=None,
+                cli_script=None,
+                env_python=None,
+                env_script=None,
+                available=True,
+                note=None,
+            ),
+            dry_run=False,
+            json_output=True,
+            mermaid_root=None,
+        )
+        is False
+    )
 
 
 def test_run_audit_logs_success_and_failure_without_stopping(tmp_path: Path) -> None:

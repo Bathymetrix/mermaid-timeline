@@ -85,7 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
     normalize.add_argument(
         "--json",
         action="store_true",
-        help="Print dry-run output as structured JSON instead of a human-readable plan.",
+        help="Print dry-run output as structured JSON instead of a human-readable plan. Requires --dry-run.",
     )
     normalize.add_argument(
         "-v",
@@ -103,8 +103,16 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = build_parser()
     args = parser.parse_args(argv)
+    _validate_args(parser, args)
     handler = getattr(args, "handler")
     return handler(args)
+
+
+def _validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    """Reject unsupported flag combinations before running the CLI."""
+
+    if args.command == "normalize" and args.json and not args.dry_run:
+        parser.error("--json requires --dry-run")
 
 
 def _handle_normalize(args: argparse.Namespace) -> int:

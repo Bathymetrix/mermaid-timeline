@@ -476,6 +476,8 @@ def build_run_specs(
                             has_bin=scenario.has_bin,
                             output_mode=output_mode,
                             decoder_choice=decoder_choice,
+                            dry_run=dry_run,
+                            json_output=json_output,
                             mermaid_root=mermaid_root,
                         )
                         availability_issue = availability_issue_for(
@@ -693,11 +695,15 @@ def expected_success(
     has_bin: bool,
     output_mode: str,
     decoder_choice: DecoderConfigChoice,
+    dry_run: bool,
+    json_output: bool,
     mermaid_root: Path | None,
 ) -> bool:
     """Predict whether the CLI should succeed for one spec."""
 
     if output_mode == "missing":
+        return False
+    if json_output and not dry_run:
         return False
     if not decoder_choice.available:
         return False
@@ -874,8 +880,6 @@ def summarize_completed_run(spec: RunSpec, returncode: int, stdout: str, stderr:
     if returncode == 0:
         if spec.dry_run and spec.json_output:
             return "Completed successfully with dry-run JSON output."
-        if spec.json_output and not spec.dry_run:
-            return "Completed successfully; --json was accepted but only affects dry-run output."
         return "Completed successfully."
 
     error_text = first_nonempty_line(stderr) or first_nonempty_line(stdout) or "non-zero exit"
@@ -903,10 +907,10 @@ def summarize_results(
         if result["status"] in {"unexpected_failure", "unexpected_success"}
     ]
     skipped = [result for result in results if result["status"] == "skipped"]
-    dry_run_json_ignored = [
+    json_without_dry_run_errors = [
         result
         for result in results
-        if result.get("status") == "success"
+        if result.get("status") == "expected_error"
         and result.get("json_output") is True
         and result.get("dry_run") is False
     ]
@@ -924,7 +928,7 @@ def summarize_results(
         "status_counts": dict(status_counts),
         "unexpected_failure_count": status_counts["unexpected_failure"] + status_counts["unexpected_success"],
         "skipped_count": status_counts["skipped"],
-        "dry_run_json_ignored_count": len(dry_run_json_ignored),
+        "json_without_dry_run_error_count": len(json_without_dry_run_errors),
         "results_path": (audit_root / "reports" / "results.jsonl").as_posix(),
         "summary_json_path": (audit_root / "reports" / "summary.json").as_posix(),
         "summary_md_path": (audit_root / "reports" / "summary.md").as_posix(),
@@ -967,7 +971,7 @@ def render_markdown_summary(summary: dict[str, object]) -> str:
             "",
             "## Notes",
             "",
-            f"- Successful `--json` without `--dry-run` cases: `{summary['dry_run_json_ignored_count']}`",
+            f"- `--json` without `--dry-run` expected-error cases: `{summary['json_without_dry_run_error_count']}`",
             f"- Skipped combinations: `{summary['skipped_count']}`",
             "",
         ]

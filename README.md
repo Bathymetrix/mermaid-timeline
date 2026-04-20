@@ -67,7 +67,7 @@ Supported normalize flags currently include:
 - `--preflight-mode {strict,cached}`
 - `--dry-run`
 - `--force-rewrite`
-- `--json` for structured dry-run output
+- `--json` for structured dry-run output; requires `--dry-run`
 - `--verbose` / `-v`
 
 `--output-dir` may also resolve from `$MERMAID/records` when `--output-dir` is omitted and `MERMAID` is set.

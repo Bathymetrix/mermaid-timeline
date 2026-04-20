@@ -36,12 +36,12 @@ Supported normalize flags currently are:
 - `--preflight-mode {strict,cached}`
 - `--dry-run`
 - `--force-rewrite`
-- `--json`
+- `--json` (requires `--dry-run`)
 - `--verbose` / `-v`
 
 `--output-dir` is optional only when the `MERMAID` environment variable is set, in which case the CLI resolves the output directory to `$MERMAID/records`.
 
-`--json` only changes CLI output when `--dry-run` is also set. Without `--dry-run`, the current implementation still prints the normal human-readable summary.
+`--json` is valid only with `--dry-run`. The CLI exits early with `--json requires --dry-run` for any other combination.
 
 ## Execution modes
 
