@@ -76,6 +76,12 @@ The CLI has both stateful mode and stateless mode. See `docs/cli.md` for the aut
 
 In v1, stateless reruns are rewrite-only for the targeted instrument outputs. They do not use append/noop incremental behavior, so rerunning the same explicit inputs does not silently duplicate JSONL rows.
 
+## Python API posture
+
+For v1, the supported public contract is intentionally conservative: the CLI, the normalized JSONL record-family outputs, and the documented behavior around them.
+
+The package root `mermaid_records` exposes package metadata such as `__version__`. Functional Python entry points are not re-exported from the package root as a broad stable API promise in v1.
+
 ## Output model
 
 Normalization writes per-instrument JSONL record families under the selected output directory.

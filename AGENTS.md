@@ -27,6 +27,7 @@
 - The canonical version must live in `src/mermaid_records/__init__.py` as `__version__`.
 - `pyproject.toml` must use dynamic versioning via `[tool.setuptools.dynamic]` with `version = {attr = "mermaid_records.__version__"}`.
 - No other hardcoded package version strings are allowed in the repo.
+- The package-root Python surface for v1 is intentionally minimal metadata only; do not re-export broader functional helpers from `mermaid_records.__init__` unless the user explicitly expands the supported API.
 
 ## Project Purpose
 

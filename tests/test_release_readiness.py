@@ -38,3 +38,17 @@ def test_root_license_file_is_present() -> None:
     license_text = (REPO_ROOT / "LICENSE").read_text(encoding="utf-8")
 
     assert license_text.startswith("MIT License")
+
+
+def test_package_root_exposes_only_conservative_metadata_surface() -> None:
+    import mermaid_records
+
+    assert mermaid_records.__all__ == [
+        "__version__",
+        "__author__",
+        "__license__",
+        "__copyright__",
+    ]
+    assert hasattr(mermaid_records, "__version__")
+    assert not hasattr(mermaid_records, "write_log_jsonl_prototypes")
+    assert not hasattr(mermaid_records, "write_mer_jsonl_prototypes")
