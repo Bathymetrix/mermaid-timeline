@@ -8,6 +8,7 @@ import sys
 
 import pytest
 
+from mermaid_records import __version__
 from mermaid_records.bin2log import Bin2LogConfig
 import mermaid_records.normalize_log as normalize_log_module
 import mermaid_records.normalize_mer as normalize_mer_module
@@ -36,7 +37,7 @@ def test_stateful_run_writes_per_instrument_outputs_and_manifests(tmp_path: Path
     assert (instrument_dir / "mer_environment_records.jsonl").exists()
     assert run_json["status"] == "success"
     assert source_state["input_root"] == input_root.as_posix()
-    assert source_state["normalization_version"] == "0.1.0"
+    assert source_state["normalization_version"] == __version__
     assert {item["source_kind"] for item in source_state["raw_sources"]} == {"log", "mer"}
     assert {item["change_kind"] for item in diff_rows} == {"new"}
     assert all(item["run_id"] == latest["run_id"] for item in diff_rows)
