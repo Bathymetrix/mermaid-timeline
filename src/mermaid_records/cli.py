@@ -162,6 +162,15 @@ def _handle_normalize(args: argparse.Namespace) -> int:
     payload = summary.to_dict()
     if args.dry_run and args.json:
         print(json.dumps(payload, sort_keys=True))
+    elif args.dry_run:
+        print(
+            _format_human_dry_run(
+                payload,
+                summary=summary,
+                elapsed_s=elapsed_s,
+                verbose=args.verbose,
+            )
+        )
     else:
         print(_format_run_summary(summary, elapsed_s=elapsed_s, verbose=args.verbose))
     return 0
@@ -244,6 +253,20 @@ def _format_dry_run(payload: dict[str, object]) -> str:
                 for row in family["decoder_invalidated"]:
                     lines.append(f"      - {_format_diff_row(row)}")
     return "\n".join(lines)
+
+
+def _format_human_dry_run(
+    payload: dict[str, object],
+    *,
+    summary: DryRunSummary,
+    elapsed_s: float,
+    verbose: bool,
+) -> str:
+    sections = [_format_run_summary(summary, elapsed_s=elapsed_s, verbose=verbose)]
+    plan = _format_dry_run(payload)
+    if plan:
+        sections.append(plan)
+    return "\n\n".join(sections)
 
 
 def _format_run_summary(

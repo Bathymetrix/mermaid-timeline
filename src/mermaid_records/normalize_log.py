@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 
-"""LOG-to-JSONL normalization helpers for prototype record-family outputs."""
+"""LOG-to-JSONL normalization helpers for conservative record-family outputs."""
 
 from __future__ import annotations
 
@@ -123,8 +123,8 @@ _GPSOFF_RE = re.compile(r"\$?GPSOFF:(?P<offset>[+-]?\d+)")
 
 
 @dataclass(slots=True)
-class LogJsonlPrototypeSummary:
-    """Summary of generated prototype JSONL streams."""
+class LogJsonlSummary:
+    """Summary of generated LOG-derived JSONL streams."""
 
     total_records: int
     operational_records: int
@@ -212,8 +212,8 @@ def write_log_jsonl_prototypes(
     run_id: str | None = None,
     malformed_log_lines: list[dict[str, object]] | None = None,
     skipped_log_files: list[dict[str, object]] | None = None,
-) -> LogJsonlPrototypeSummary:
-    """Write conservative LOG-derived JSONL prototype streams."""
+) -> LogJsonlSummary:
+    """Write conservative LOG-derived JSONL streams."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
     output_paths = {
@@ -454,7 +454,7 @@ def write_log_jsonl_prototypes(
         for (subsystem, code, message), count in unclassified_patterns.most_common(10)
     ]
 
-    return LogJsonlPrototypeSummary(
+    return LogJsonlSummary(
         total_records=total_records,
         operational_records=operational_count,
         acquisition_records=acquisition_count,
@@ -484,6 +484,10 @@ def write_log_jsonl_prototypes(
         unclassified_examples=unclassified_examples,
         common_unclassified_patterns=common_patterns,
     )
+
+
+# Backward-compatible alias for pre-v1 module consumers.
+LogJsonlPrototypeSummary = LogJsonlSummary
 
 
 def _iter_log_source_units(

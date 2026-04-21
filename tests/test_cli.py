@@ -134,6 +134,9 @@ def test_normalize_cli_dry_run_human_output_is_side_effect_free(tmp_path: Path, 
     assert "mode: stateful" in captured.out
     assert "raw files processed: 1" in captured.out
     assert "not evaluated" in captured.out
+    assert "INSTRUMENT 467.174-T-0100" in captured.out
+    assert "log: append" in captured.out
+    assert "0100_sample.LOG (0 B -> " in captured.out
     assert not output_dir.exists()
 
 

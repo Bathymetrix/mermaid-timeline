@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 
-"""MER-to-JSONL normalization helpers for provenance-preserving prototype outputs."""
+"""MER-to-JSONL normalization helpers for provenance-preserving record-family outputs."""
 
 from __future__ import annotations
 
@@ -100,8 +100,8 @@ def _classify_mer_tag_kind(
 
 
 @dataclass(slots=True)
-class MerJsonlPrototypeSummary:
-    """Summary of generated MER-derived JSONL prototype streams."""
+class MerJsonlSummary:
+    """Summary of generated MER-derived JSONL streams."""
 
     environment_records: int
     parameter_records: int
@@ -141,8 +141,8 @@ def write_mer_jsonl_prototypes(
     run_id: str | None = None,
     malformed_mer_blocks: list[dict[str, object]] | None = None,
     skipped_mer_files: list[dict[str, object]] | None = None,
-) -> MerJsonlPrototypeSummary:
-    """Write conservative MER-derived JSONL prototype streams."""
+) -> MerJsonlSummary:
+    """Write conservative MER-derived JSONL streams."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
     output_paths = {
@@ -297,7 +297,7 @@ def write_mer_jsonl_prototypes(
             except Exception as exc:
                 raise ValueError(f"Error while normalizing MER file {path}: {exc}") from exc
 
-    return MerJsonlPrototypeSummary(
+    return MerJsonlSummary(
         environment_records=environment_count,
         parameter_records=parameter_count,
         event_records=event_count,
@@ -317,6 +317,10 @@ def write_mer_jsonl_prototypes(
         example_event_with_fname=example_event_with_fname,
         example_event_with_trigger_fields=example_event_with_trigger_fields,
     )
+
+
+# Backward-compatible alias for pre-v1 module consumers.
+MerJsonlPrototypeSummary = MerJsonlSummary
 
 
 def _build_environment_record(
