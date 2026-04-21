@@ -40,6 +40,7 @@ def test_pyproject_uses_dynamic_version_and_release_description() -> None:
         "Canonical normalization of raw MERMAID BIN, LOG, and MER data into JSONL record families."
     )
     assert pyproject["project"]["requires-python"] == f">={EXPECTED_MIN_PYTHON}"
+    assert pyproject["project"]["license"] == "MIT"
     assert "Programming Language :: Python :: 3.12" in pyproject["project"]["classifiers"]
 
 
