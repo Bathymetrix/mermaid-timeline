@@ -41,7 +41,7 @@ mermaid-records normalize \
 
 Quick usage flags:
 
-- Input selection: `--input-root` for `stateful` mode, or `--input-file` for explicit `stateless` runs
+- Input selection: `--input-root` for `stateful mode`, or `--input-file` for explicit `stateless mode` runs
 - Output: `--output-dir`; if omitted, the CLI uses `$MERMAID/records` when `MERMAID` is set
 - BIN decoder and preflight: `--decoder-python` and `--decoder-script` (used together), plus `--preflight-mode {strict,cached}`
 - Planning and reporting: `--dry-run`, `--json` (dry-run only), and `--verbose` / `-v`
