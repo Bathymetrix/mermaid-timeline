@@ -1,0 +1,128 @@
+# mermaid-timeline Schema
+
+Schema version: `0.1.0`
+
+All products are JSONL streams. There is no top-level document wrapper.
+
+## Common Fields
+
+Every interval record includes:
+
+- `schema_version`
+- `generated_by`
+- `instrument_id`
+- `interval_type`
+- `start_time`
+- `end_time`
+- `start_boundary`
+- `end_boundary`
+- `provenance`
+
+Boundary vocabulary for `0.1.0`:
+
+- `closed`: the interval boundary timestamp is included in the known interval.
+- `open_unknown`: the true boundary is unknown and must not be inferred from the
+  evidence timestamp.
+
+## BUF Intervals
+
+Input: `log_acquisition_records.jsonl`
+
+Required input fields:
+
+- `instrument_id`
+- `record_time`
+- `acquisition_state`
+- `acquisition_evidence_kind`
+
+Output shape:
+
+```json
+{
+  "schema_version": "0.1.0",
+  "generated_by": {
+    "package": "mermaid-timeline",
+    "version": "0.1.0"
+  },
+  "instrument_id": "0100",
+  "interval_type": "buf",
+  "start_time": "2023-11-20T10:00:00Z",
+  "end_time": null,
+  "start_boundary": "closed",
+  "end_boundary": "open_unknown",
+  "start_evidence_kind": "transition",
+  "end_evidence_kind": "assertion",
+  "start_evidence_time": "2023-11-20T10:00:00Z",
+  "end_evidence_time": "2023-11-20T12:45:10Z",
+  "provenance": {
+    "records_file": "log_acquisition_records.jsonl",
+    "start_record_line": 1550,
+    "end_record_line": 1551,
+    "source_file": "0100_acq.LOG"
+  }
+}
+```
+
+### BUF State Machine
+
+Rows are grouped by `instrument_id` and processed chronologically by
+`record_time`, preserving input order for tied timestamps.
+
+Rules:
+
+- `started` + `transition`: opens a new active interval.
+- `started` + `assertion`: opens a conservative active interval only if no
+  interval is already active.
+- `stopped` + `transition`: closes the active interval with a closed end.
+- `stopped` + `assertion`: if an interval is active, emits it with
+  `end_time = null` and `end_boundary = "open_unknown"` because the true stop
+  happened before the assertion.
+- Repeated `stopped` assertions do not create intervals.
+- Duplicate or orphan transitions are strict validation errors and diagnostic
+  mode diagnostics.
+- If input ends while an interval is active, the interval is emitted with
+  `end_time = null` and `end_boundary = "open_unknown"`.
+
+## DET / REQ Intervals
+
+Input: `mer_event_records.jsonl`
+
+DET classification:
+
+- `criterion`, `snr`, `trig`, and `detrig` are all non-null.
+
+REQ classification:
+
+- `criterion`, `snr`, `trig`, and `detrig` are all null.
+
+Mixed combinations are validation failures.
+
+Timing convention:
+
+- `start_time = date`
+- `end_time = date + (length - 1) / sampling_rate`
+
+Output shape:
+
+```json
+{
+  "schema_version": "0.1.0",
+  "generated_by": {
+    "package": "mermaid-timeline",
+    "version": "0.1.0"
+  },
+  "instrument_id": "0007",
+  "interval_type": "det",
+  "start_time": "2018-07-12T06:49:56.429681Z",
+  "end_time": "2018-07-12T06:53:38.779681Z",
+  "start_boundary": "closed",
+  "end_boundary": "closed",
+  "sampling_rate_hz": 20.0,
+  "sample_count": 4448,
+  "provenance": {
+    "records_file": "mer_event_records.jsonl",
+    "record_line": 123,
+    "source_file": "0007_XXXXXXXX.MER"
+  }
+}
+```

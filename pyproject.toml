@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mermaid-timeline"
+version = "0.1.0"
+description = "Interval-level timeline synthesis for normalized MERMAID records."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+  { name = "MERMAID tooling contributors" },
+]
+dependencies = []
+
+[project.scripts]
+mermaid-timeline = "mermaid_timeline.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
