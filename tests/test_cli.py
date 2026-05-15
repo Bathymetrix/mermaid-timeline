@@ -90,6 +90,63 @@ class CliTests(unittest.TestCase):
                 "req",
             )
 
+    def test_cli_diagnostic_mode_writes_diagnostics_jsonl(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp_path = Path(tmp_name)
+            input_dir = tmp_path / "records" / "467.174-T-0100"
+            input_dir.mkdir(parents=True)
+            _write_jsonl(
+                input_dir / "log_acquisition_records.jsonl",
+                [
+                    {
+                        "instrument_id": "0100",
+                        "source_file": "0100_acq.LOG",
+                        "record_time": "2023-11-20T10:00:00",
+                        "acquisition_state": "stopped",
+                        "acquisition_evidence_kind": "transition",
+                    }
+                ],
+            )
+
+            output_root = tmp_path / "timeline"
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(
+                    [
+                        "build",
+                        "--input-root",
+                        str(tmp_path / "records"),
+                        "--output-root",
+                        str(output_root),
+                        "--validation",
+                        "diagnostic",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            summary = json.loads(output.getvalue())
+            self.assertEqual(summary["diagnostics"], 1)
+
+            diagnostics = _read_jsonl(
+                output_root / "467.174-T-0100" / "timeline_diagnostics.jsonl"
+            )
+            self.assertEqual(
+                diagnostics,
+                [
+                    {
+                        "severity": "warning",
+                        "code": "orphan_stop_transition",
+                        "message": (
+                            "stopped transition encountered with no active interval"
+                        ),
+                        "records_file": "log_acquisition_records.jsonl",
+                        "record_line": 1,
+                        "instrument_id": "0100",
+                        "source_file": "0100_acq.LOG",
+                    }
+                ],
+            )
+
 
 def _write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     with path.open("w", encoding="utf-8") as handle:

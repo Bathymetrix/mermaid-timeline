@@ -63,6 +63,37 @@ Output shape:
 }
 ```
 
+## Diagnostics
+
+Diagnostic mode may write `timeline_diagnostics.jsonl` next to interval output
+files for an input records directory. The file is a flat JSONL stream with one
+diagnostic object per line and no top-level document wrapper. It is only written
+when diagnostics are emitted.
+
+Diagnostic shape:
+
+```json
+{
+  "severity": "warning",
+  "code": "orphan_stop_transition",
+  "message": "stopped transition encountered with no active interval",
+  "records_file": "log_acquisition_records.jsonl",
+  "record_line": 1,
+  "instrument_id": "0100",
+  "source_file": "0100_acq.LOG"
+}
+```
+
+Fields:
+
+- `severity`: currently `warning` or `error`.
+- `code`: stable diagnostic code for the validation condition.
+- `message`: human-readable diagnostic detail.
+- `records_file`: normalized input JSONL filename that produced the diagnostic.
+- `record_line`: 1-based input JSONL line number, or `null` if unavailable.
+- `instrument_id`: source instrument ID, or `null` if unavailable.
+- `source_file`: upstream source basename, or `null` if unavailable.
+
 ### BUF State Machine
 
 Rows are grouped by `instrument_id` and processed chronologically by
