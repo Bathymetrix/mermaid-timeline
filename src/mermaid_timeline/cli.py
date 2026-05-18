@@ -17,6 +17,20 @@ from mermaid_timeline.plotting import (
 )
 
 
+class _CompactOptionHelpFormatter(argparse.HelpFormatter):
+    """Avoid repeating metavars for short and long aliases in help output."""
+
+    def _format_action_invocation(self, action: argparse.Action) -> str:
+        if not action.option_strings or action.nargs == 0:
+            return super()._format_action_invocation(action)
+
+        default = action.dest.upper()
+        args_string = self._format_args(action, default)
+        return ", ".join(
+            [*action.option_strings[:-1], f"{action.option_strings[-1]} {args_string}"]
+        )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -77,12 +91,14 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mermaid-timeline",
         description="Synthesize interval timeline products from normalized MERMAID records.",
+        formatter_class=_CompactOptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="command")
 
     build = subparsers.add_parser(
         "build",
         help="build buffer_intervals.jsonl and detreq_intervals.jsonl",
+        formatter_class=_CompactOptionHelpFormatter,
     )
     build.add_argument(
         "-i",
@@ -106,6 +122,7 @@ def _build_parser() -> argparse.ArgumentParser:
     plot = subparsers.add_parser(
         "plot",
         help="write an optional Plotly HTML availability report",
+        formatter_class=_CompactOptionHelpFormatter,
     )
     plot.add_argument(
         "-i",

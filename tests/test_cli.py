@@ -149,6 +149,17 @@ class CliTests(unittest.TestCase):
                 ],
             )
 
+    def test_cli_build_help_collapses_duplicate_metavars(self) -> None:
+        output = io.StringIO()
+        with redirect_stdout(output):
+            with self.assertRaises(SystemExit) as cm:
+                main(["build", "--help"])
+
+        self.assertEqual(cm.exception.code, 0)
+        self.assertIn("-i, --input-root INPUT_ROOT", output.getvalue())
+        self.assertIn("-o, --output-root OUTPUT_ROOT", output.getvalue())
+        self.assertNotIn("-i INPUT_ROOT, --input-root INPUT_ROOT", output.getvalue())
+
     def test_cli_plot_help_succeeds(self) -> None:
         output = io.StringIO()
         with redirect_stdout(output):
@@ -158,6 +169,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(cm.exception.code, 0)
         self.assertIn("--input-root", output.getvalue())
         self.assertIn("--instrument-id", output.getvalue())
+        self.assertIn("-i, --input-root INPUT_ROOT", output.getvalue())
+        self.assertNotIn("-i INPUT_ROOT, --input-root INPUT_ROOT", output.getvalue())
 
     def test_cli_plot_writes_html_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_name:
