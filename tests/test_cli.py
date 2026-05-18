@@ -142,6 +142,9 @@ class CliTests(unittest.TestCase):
                             "stopped transition encountered with no active interval"
                         ),
                         "records_file": "log_acquisition_records.jsonl",
+                        "input_file": str(
+                            (input_dir / "log_acquisition_records.jsonl").resolve()
+                        ),
                         "record_line": 1,
                         "issue_time": "2023-11-20T10:00:00Z",
                         "instrument_id": "0100",
@@ -381,6 +384,129 @@ class CliTests(unittest.TestCase):
             self.assertEqual(exit_code, 1)
             self.assertIn("mermaid-timeline[plot]", stderr.getvalue())
 
+    def test_cli_build_reports_jsonl_parse_file_line_and_column(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp_path = Path(tmp_name)
+            input_dir = tmp_path / "records" / "467.174-T-0100"
+            input_dir.mkdir(parents=True)
+            records_path = input_dir / "log_acquisition_records.jsonl"
+            records_path.write_text(
+                '{"instrument_id":"0100"}\n{"instrument_id":\n',
+                encoding="utf-8",
+            )
+
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                exit_code = main(
+                    [
+                        "build",
+                        "--input-root",
+                        str(tmp_path / "records"),
+                        "--output-root",
+                        str(tmp_path / "timeline"),
+                    ]
+                )
+
+            error = stderr.getvalue()
+            self.assertEqual(exit_code, 1)
+            self.assertIn(f"file: {records_path.resolve()}", error)
+            self.assertIn("line: 2", error)
+            self.assertIn("column:", error)
+
+    def test_cli_build_reports_validation_file_line_field_and_value(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp_path = Path(tmp_name)
+            input_dir = tmp_path / "records" / "467.174-T-0100"
+            input_dir.mkdir(parents=True)
+            records_path = input_dir / "mer_event_records.jsonl"
+            _write_jsonl(
+                records_path,
+                [
+                    {
+                        "instrument_id": "0100",
+                        "source_file": "0100_event.MER",
+                        "date": "2024-02-07T22:47:22",
+                        "criterion": None,
+                        "snr": None,
+                        "trig": None,
+                        "detrig": None,
+                        "sampling_rate": "20.000000",
+                        "length": "2",
+                    },
+                    {
+                        "instrument_id": "0100",
+                        "source_file": "0100_event.MER",
+                        "date": "2024-02-07T22:48:22",
+                        "criterion": None,
+                        "snr": None,
+                        "trig": None,
+                        "detrig": None,
+                        "sampling_rate": None,
+                        "length": "2",
+                    },
+                ],
+            )
+
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                exit_code = main(
+                    [
+                        "build",
+                        "--input-root",
+                        str(tmp_path / "records"),
+                        "--output-root",
+                        str(tmp_path / "timeline"),
+                    ]
+                )
+
+            error = stderr.getvalue()
+            self.assertEqual(exit_code, 1)
+            self.assertIn("Invalid DET/REQ interval record", error)
+            self.assertIn(f"file: {records_path.resolve()}", error)
+            self.assertIn("line: 2", error)
+            self.assertIn("field: sampling_rate", error)
+            self.assertIn("value: null", error)
+            self.assertIn("expected: positive number", error)
+
+    def test_cli_plot_reports_interval_file_line_and_field(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_name:
+            tmp_path = Path(tmp_name)
+            output_dir = tmp_path / "timeline" / "467.174-T-0100"
+            intervals_path = output_dir / "detreq_intervals.jsonl"
+            _write_jsonl(
+                intervals_path,
+                [
+                    {
+                        "instrument_id": "0100",
+                        "interval_type": "det",
+                        "end_time": "2024-02-07T22:47:23Z",
+                        "start_boundary": "closed",
+                        "end_boundary": "closed",
+                    },
+                ],
+            )
+
+            stderr = io.StringIO()
+            with patch(
+                "mermaid_timeline.plotting._load_plotly",
+                return_value=(_FakeGo, _fake_plot),
+            ), redirect_stderr(stderr):
+                exit_code = main(
+                    [
+                        "plot",
+                        "--input-root",
+                        str(tmp_path / "timeline"),
+                        "--output",
+                        str(tmp_path / "timeline.html"),
+                    ]
+                )
+
+            error = stderr.getvalue()
+            self.assertEqual(exit_code, 1)
+            self.assertIn(f"file: {intervals_path.resolve()}", error)
+            self.assertIn("line: 1", error)
+            self.assertIn("field: start_time", error)
+
 
 def _write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -391,7 +517,18 @@ def _write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
 
 
 def _read_jsonl(path: Path) -> list[dict[str, object]]:
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    rows: list[dict[str, object]] = []
+    for line_number, line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(),
+        start=1,
+    ):
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError as exc:
+            raise AssertionError(
+                f"{path}:{line_number}:{exc.colno}: invalid JSONL in test fixture"
+            ) from exc
+    return rows
 
 
 class _FakeTrace:

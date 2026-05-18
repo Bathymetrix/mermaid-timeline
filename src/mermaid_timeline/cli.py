@@ -45,6 +45,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         except TimelineValidationError as exc:
             print(f"mermaid-timeline: validation failed: {exc}", file=sys.stderr)
             return 1
+        except ValueError as exc:
+            print(f"mermaid-timeline: build failed: {exc}", file=sys.stderr)
+            return 1
         print(
             json.dumps(
                 {

@@ -8,7 +8,12 @@ from pathlib import Path
 
 from mermaid_timeline._time import parse_timestamp
 from mermaid_timeline.pipeline import BUFFER_INTERVALS_FILE, DETREQ_INTERVALS_FILE
-from mermaid_timeline.records import JsonObject, SourceRecord, iter_jsonl
+from mermaid_timeline.records import (
+    JsonObject,
+    SourceRecord,
+    format_input_error,
+    iter_jsonl,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +77,16 @@ def _interval_from_record(path: Path, record: SourceRecord) -> IntervalRow:
     elif isinstance(provenance_value, dict):
         provenance = provenance_value
     else:
-        raise ValueError(f"{path}:{record.line_number}: provenance must be an object")
+        raise ValueError(
+            format_input_error(
+                "Invalid interval record",
+                file=path,
+                line=record.line_number,
+                field="provenance",
+                value=provenance_value,
+                expected="JSON object",
+            )
+        )
 
     return IntervalRow(
         instrument_id=instrument_id,
@@ -97,7 +111,16 @@ def _required_string(
 ) -> str:
     value = row.get(field_name)
     if value is None or str(value).strip() == "":
-        raise ValueError(f"{path}:{line_number}: {field_name} is required")
+        raise ValueError(
+            format_input_error(
+                "Invalid interval record",
+                file=path,
+                line=line_number,
+                field=field_name,
+                value=value,
+                expected="non-empty string",
+            )
+        )
     return str(value)
 
 
@@ -110,4 +133,14 @@ def _parse_time(
     try:
         return parse_timestamp(value, field_name=field_name)
     except ValueError as exc:
-        raise ValueError(f"{path}:{line_number}: {exc}") from exc
+        raise ValueError(
+            format_input_error(
+                "Invalid interval record",
+                file=path,
+                line=line_number,
+                field=field_name,
+                value=value,
+                expected="ISO-8601 timestamp",
+                detail=str(exc),
+            )
+        ) from exc

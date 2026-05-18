@@ -33,6 +33,7 @@ class TimelineResult:
 @dataclass(frozen=True, slots=True)
 class _AcquisitionEvent:
     line_number: int
+    source_path: str | None
     row: JsonObject
     instrument_id: str
     state: str
@@ -93,15 +94,15 @@ def _validated_events(
     for record in records:
         row = record.row
         instrument_id = _required_string(
-            row, "instrument_id", record.line_number, ctx, records_file
+            row, "instrument_id", record, ctx, records_file
         )
         state = _required_string(
-            row, "acquisition_state", record.line_number, ctx, records_file
+            row, "acquisition_state", record, ctx, records_file
         )
         evidence_kind = _required_string(
             row,
             "acquisition_evidence_kind",
-            record.line_number,
+            record,
             ctx,
             records_file,
         )
@@ -113,8 +114,13 @@ def _validated_events(
                 code="invalid_acquisition_state",
                 message=f"expected acquisition_state started/stopped, got {state!r}",
                 records_file=records_file,
+                input_file=_input_file(record, records_file),
                 record_line=record.line_number,
+                field="acquisition_state",
+                value=state,
+                expected="started or stopped",
                 row=row,
+                title="Invalid BUF interval record",
             )
             continue
         if evidence_kind not in ("transition", "assertion"):
@@ -126,8 +132,13 @@ def _validated_events(
                     f"got {evidence_kind!r}"
                 ),
                 records_file=records_file,
+                input_file=_input_file(record, records_file),
                 record_line=record.line_number,
+                field="acquisition_evidence_kind",
+                value=evidence_kind,
+                expected="transition or assertion",
                 row=row,
+                title="Invalid BUF interval record",
             )
             continue
         try:
@@ -138,13 +149,20 @@ def _validated_events(
                 code="invalid_record_time",
                 message=str(exc),
                 records_file=records_file,
+                input_file=_input_file(record, records_file),
                 record_line=record.line_number,
+                field="record_time",
+                value=row.get("record_time"),
+                expected="ISO-8601 timestamp",
                 row=row,
+                cause=exc,
+                title="Invalid BUF interval record",
             )
             continue
         events.append(
             _AcquisitionEvent(
                 line_number=record.line_number,
+                source_path=_input_file(record, records_file),
                 row=row,
                 instrument_id=instrument_id,
                 state=state,
@@ -174,9 +192,11 @@ def _build_instrument_intervals(
                     code="duplicate_start_transition",
                     message="started transition encountered while an interval is active",
                     records_file=records_file,
+                    input_file=event.source_path,
                     record_line=event.line_number,
                     row=event.row,
                     issue_time=format_timestamp(event.time),
+                    title="Invalid BUF interval record",
                 )
                 continue
             current = _OpenInterval(record=event)
@@ -194,9 +214,11 @@ def _build_instrument_intervals(
                     code="orphan_stop_transition",
                     message="stopped transition encountered with no active interval",
                     records_file=records_file,
+                    input_file=event.source_path,
                     record_line=event.line_number,
                     row=event.row,
                     issue_time=format_timestamp(event.time),
+                    title="Invalid BUF interval record",
                 )
                 continue
             intervals.append(
@@ -278,7 +300,7 @@ def _interval_record(
 def _required_string(
     row: JsonObject,
     field_name: str,
-    line_number: int,
+    record: SourceRecord,
     ctx: ValidationContext,
     records_file: str,
 ) -> str | None:
@@ -289,8 +311,17 @@ def _required_string(
             code="missing_field",
             message=f"{field_name} is required",
             records_file=records_file,
-            record_line=line_number,
+            input_file=_input_file(record, records_file),
+            record_line=record.line_number,
+            field=field_name,
+            value=value,
+            expected="non-empty string",
             row=row,
+            title="Invalid BUF interval record",
         )
         return None
     return str(value)
+
+
+def _input_file(record: SourceRecord, records_file: str) -> str:
+    return str(record.source_path) if record.source_path is not None else records_file

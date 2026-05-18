@@ -84,8 +84,14 @@ def _interval_from_record(
             code="invalid_event_date",
             message=str(exc),
             records_file=records_file,
+            input_file=_input_file(record, records_file),
             record_line=record.line_number,
+            field="date",
+            value=row.get("date"),
+            expected="ISO-8601 timestamp",
             row=row,
+            cause=exc,
+            title="Invalid DET/REQ interval record",
         )
         return None
 
@@ -141,8 +147,13 @@ def _classify_interval_type(
         code="mixed_detreq_fields",
         message=f"criterion/snr/trig/detrig must be all present or all null: {fields}",
         records_file=records_file,
+        input_file=_input_file(record, records_file),
         record_line=record.line_number,
+        field="criterion/snr/trig/detrig",
+        value=fields,
+        expected="all present for DET or all null for REQ",
         row=row,
+        title="Invalid DET/REQ interval record",
     )
     return None
 
@@ -165,14 +176,20 @@ def _parse_positive_float(
     value = row.get(field_name)
     try:
         parsed = float(str(value))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as exc:
         ctx.report(
             severity="error",
             code=f"invalid_{field_name}",
             message=f"{field_name} must be a positive number",
             records_file=records_file,
+            input_file=_input_file(record, records_file),
             record_line=record.line_number,
+            field=field_name,
+            value=value,
+            expected="positive number",
             row=row,
+            cause=exc,
+            title="Invalid DET/REQ interval record",
         )
         return None
     if parsed <= 0:
@@ -181,8 +198,13 @@ def _parse_positive_float(
             code=f"invalid_{field_name}",
             message=f"{field_name} must be positive",
             records_file=records_file,
+            input_file=_input_file(record, records_file),
             record_line=record.line_number,
+            field=field_name,
+            value=value,
+            expected="positive number",
             row=row,
+            title="Invalid DET/REQ interval record",
         )
         return None
     return parsed
@@ -198,14 +220,20 @@ def _parse_positive_int(
     value = row.get(field_name)
     try:
         parsed = int(str(value))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as exc:
         ctx.report(
             severity="error",
             code=f"invalid_{field_name}",
             message=f"{field_name} must be a positive integer",
             records_file=records_file,
+            input_file=_input_file(record, records_file),
             record_line=record.line_number,
+            field=field_name,
+            value=value,
+            expected="positive integer",
             row=row,
+            cause=exc,
+            title="Invalid DET/REQ interval record",
         )
         return None
     if parsed <= 0:
@@ -214,8 +242,13 @@ def _parse_positive_int(
             code=f"invalid_{field_name}",
             message=f"{field_name} must be positive",
             records_file=records_file,
+            input_file=_input_file(record, records_file),
             record_line=record.line_number,
+            field=field_name,
+            value=value,
+            expected="positive integer",
             row=row,
+            title="Invalid DET/REQ interval record",
         )
         return None
     return parsed
@@ -235,8 +268,13 @@ def _required_string(
             code="missing_field",
             message=f"{field_name} is required",
             records_file=records_file,
+            input_file=_input_file(record, records_file),
             record_line=record.line_number,
+            field=field_name,
+            value=value,
+            expected="non-empty string",
             row=row,
+            title="Invalid DET/REQ interval record",
         )
         return None
     return str(value)
@@ -244,3 +282,7 @@ def _required_string(
 
 def _has_value(value: object) -> bool:
     return value is not None and str(value).strip() != ""
+
+
+def _input_file(record: SourceRecord, records_file: str) -> str:
+    return str(record.source_path) if record.source_path is not None else records_file
