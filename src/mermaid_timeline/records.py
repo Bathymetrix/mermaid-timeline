@@ -158,7 +158,25 @@ def write_jsonl(path: Path, rows: Iterable[JsonObject]) -> int:
     count = 0
     with path.open("w", encoding="utf-8") as handle:
         for row in rows:
-            handle.write(json.dumps(row, sort_keys=False, separators=(",", ":")))
+            handle.write(_json_dumps(row))
             handle.write("\n")
             count += 1
     return count
+
+
+def _json_dumps(value: object, *, key: str | None = None) -> str:
+    if isinstance(value, dict):
+        return (
+            "{"
+            + ",".join(
+                f"{json.dumps(item_key, ensure_ascii=True)}:"
+                f"{_json_dumps(item_value, key=str(item_key))}"
+                for item_key, item_value in value.items()
+            )
+            + "}"
+        )
+    if isinstance(value, list):
+        return "[" + ",".join(_json_dumps(item) for item in value) + "]"
+    if key == "duration" and isinstance(value, float):
+        return format(value, ".6f")
+    return json.dumps(value, ensure_ascii=True, separators=(",", ":"))

@@ -1,6 +1,6 @@
 # mermaid-timeline Schema
 
-Current schema version: `0.1.0`
+Current schema version: `0.2.0`
 
 All products are JSONL streams. There is no top-level document wrapper.
 
@@ -24,17 +24,22 @@ Every interval record includes:
 - `interval_type`
 - `start_time`
 - `end_time`
+- `duration`
 - `start_boundary`
 - `end_boundary`
 - `provenance`
 
-Boundary vocabulary for `0.1.0`:
+`duration` is the known interval duration in seconds, emitted as a JSON number
+with exactly 6 decimal places. Open-ended BUF intervals with unknown `end_time`
+emit `duration: null`.
+
+Boundary vocabulary for `0.2.0`:
 
 - `closed`: the interval boundary timestamp is included in the known interval.
 - `open_unknown`: the true boundary is unknown and must not be inferred from the
   evidence timestamp.
 
-`interval_type` vocabulary for `0.1.0`:
+`interval_type` vocabulary for `0.2.0`:
 
 - `buf`: acquisition buffer interval synthesized from acquisition records.
 - `det`: detected MER event interval.
@@ -79,10 +84,10 @@ Summary shape:
 
 ```json
 {
-  "schema_version": "0.1.0",
+  "schema_version": "0.2.0",
   "generated_by": {
     "package": "mermaid-timeline",
-    "version": "0.1.0"
+    "version": "0.1.1"
   },
   "instrument_id": "T0100",
   "instrument_serial": "467.174-T-0100",
@@ -90,9 +95,9 @@ Summary shape:
   "bin_start_time": "2024-01-02T00:00:00.000000Z",
   "bin_end_time": "2024-01-03T00:00:00.000000Z",
   "duration_seconds": {
-    "buf": 3600.0,
-    "det": 0.0,
-    "req": 0.0
+    "buf": 3600.000000,
+    "det": 0.000000,
+    "req": 0.000000
   },
   "interval_count": {
     "buf": 1,
@@ -100,9 +105,9 @@ Summary shape:
     "req": 0
   },
   "duration_fraction": {
-    "buf": 0.041666666666666664,
-    "det": 0.0,
-    "req": 0.0
+    "buf": 0.041667,
+    "det": 0.000000,
+    "req": 0.000000
   },
   "binning_policy": "clip_intervals_to_half_open_bins",
   "overlap_policy": "sum_durations_without_unioning_by_interval_type"
@@ -127,15 +132,16 @@ Output shape:
 
 ```json
 {
-  "schema_version": "0.1.0",
+  "schema_version": "0.2.0",
   "generated_by": {
     "package": "mermaid-timeline",
-    "version": "0.1.0"
+    "version": "0.1.1"
   },
   "instrument_id": "T0100",
   "interval_type": "buf",
   "start_time": "2023-11-20T10:00:00.000000Z",
   "end_time": null,
+  "duration": null,
   "start_boundary": "closed",
   "end_boundary": "open_unknown",
   "start_evidence_kind": "transition",
@@ -238,15 +244,16 @@ Output shape:
 
 ```json
 {
-  "schema_version": "0.1.0",
+  "schema_version": "0.2.0",
   "generated_by": {
     "package": "mermaid-timeline",
-    "version": "0.1.0"
+    "version": "0.1.1"
   },
   "instrument_id": "T0007",
   "interval_type": "det",
   "start_time": "2018-07-12T06:49:56.429681Z",
   "end_time": "2018-07-12T06:53:38.779681Z",
+  "duration": 222.350000,
   "start_boundary": "closed",
   "end_boundary": "closed",
   "sampling_rate_hz": 20.0,

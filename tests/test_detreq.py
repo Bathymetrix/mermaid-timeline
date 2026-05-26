@@ -33,6 +33,7 @@ class DetReqTests(unittest.TestCase):
         self.assertEqual(interval["interval_type"], "req")
         self.assertEqual(interval["start_time"], "2018-07-12T06:49:56.429681Z")
         self.assertEqual(interval["end_time"], "2018-07-12T06:53:38.779681Z")
+        self.assertEqual(interval["duration"], 222.35)
         self.assertEqual(interval["sampling_rate_hz"], 20.0)
         self.assertEqual(interval["sample_count"], 4448)
         self.assertEqual(interval["schema_version"], SCHEMA_VERSION)
@@ -55,6 +56,12 @@ class DetReqTests(unittest.TestCase):
 
         self.assertEqual(result.intervals[0]["interval_type"], "det")
 
+    def test_duration_field_follows_end_time(self) -> None:
+        interval = build_detreq_intervals([event_row()]).intervals[0]
+
+        keys = list(interval)
+        self.assertEqual(keys[keys.index("end_time") + 1], "duration")
+
     def test_mixed_detection_fields_are_validation_failures(self) -> None:
         rows = [event_row(criterion="0.0296122")]
 
@@ -74,6 +81,7 @@ class DetReqTests(unittest.TestCase):
         interval = result.intervals[0]
         self.assertEqual(interval["start_time"], "2018-07-12T06:49:56.429681Z")
         self.assertEqual(interval["end_time"], "2018-07-12T06:49:56.429681Z")
+        self.assertEqual(interval["duration"], 0.0)
 
     def test_offset_event_date_is_converted_to_utc(self) -> None:
         result = build_detreq_intervals(

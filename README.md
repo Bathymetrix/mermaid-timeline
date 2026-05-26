@@ -9,7 +9,7 @@ these interval products alongside catalogs and travel-time products.
 
 Requires Python 3.12 or newer; Python 3.12 through 3.14 are supported.
 
-Python import paths are not yet a stable public API. The stable v0.1 contract
+Python import paths are not yet a stable public API. The stable v0.2 contract
 is the `mermaid-timeline` CLI plus the documented JSONL input/output schemas.
 
 ## Inputs
@@ -30,10 +30,17 @@ Each output is a flat JSONL stream:
 - `detreq_intervals.jsonl`
 - `summary_intervals.jsonl`
 
+`buffer_intervals.jsonl` and `detreq_intervals.jsonl` include a `duration`
+field immediately after `end_time`. Closed intervals emit known durations in
+seconds as JSON numbers with exactly 6 decimal places. Open-ended BUF intervals
+emit `duration: null`.
+
 `summary_intervals.jsonl` aggregates known BUF/DET/REQ interval durations into
 UTC day, ISO Monday-start week, month, and year bins. Intervals are clipped to
 half-open bin boundaries, and BUF, DET, and REQ totals remain separate. Overlaps
-within the same interval type are summed rather than unioned.
+within the same interval type are summed rather than unioned. Summary duration
+and fraction values are also emitted as JSON numbers with exactly 6 decimal
+places.
 
 ## CLI
 

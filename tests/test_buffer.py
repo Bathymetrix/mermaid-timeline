@@ -38,6 +38,7 @@ class BufferTests(unittest.TestCase):
         interval = result.intervals[0]
         self.assertEqual(interval["start_time"], "2023-11-20T10:00:00.000000Z")
         self.assertEqual(interval["end_time"], "2023-11-20T12:45:10.000000Z")
+        self.assertEqual(interval["duration"], 9910.0)
         self.assertEqual(interval["start_boundary"], "closed")
         self.assertEqual(interval["end_boundary"], "closed")
         self.assertEqual(interval["start_evidence_kind"], "assertion")
@@ -60,6 +61,7 @@ class BufferTests(unittest.TestCase):
         interval = result.intervals[0]
         self.assertEqual(interval["start_time"], "2023-11-20T10:00:00.000000Z")
         self.assertIsNone(interval["end_time"])
+        self.assertIsNone(interval["duration"])
         self.assertEqual(interval["end_boundary"], "open_unknown")
         self.assertEqual(interval["end_evidence_kind"], "assertion")
         self.assertEqual(
@@ -76,6 +78,17 @@ class BufferTests(unittest.TestCase):
 
         self.assertEqual(result.intervals, [])
         self.assertEqual(result.diagnostics, [])
+
+    def test_duration_field_follows_end_time(self) -> None:
+        interval = build_buffer_intervals(
+            [
+                row("2023-11-20T10:00:00", "started", "transition"),
+                row("2023-11-20T10:00:01", "stopped", "transition"),
+            ]
+        ).intervals[0]
+
+        keys = list(interval)
+        self.assertEqual(keys[keys.index("end_time") + 1], "duration")
 
     def test_assertion_inside_transition_interval_does_not_split_interval(self) -> None:
         result = build_buffer_intervals(

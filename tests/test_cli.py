@@ -107,6 +107,30 @@ class CliTests(unittest.TestCase):
                 },
             )
             output_dir = output_root / "467.174-T-0100"
+            buffer_text = (output_dir / "buffer_intervals.jsonl").read_text(
+                encoding="utf-8"
+            )
+            detreq_text = (output_dir / "detreq_intervals.jsonl").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn(
+                '"end_time":"2023-11-20T11:00:00.000000Z",'
+                '"duration":3600.000000',
+                buffer_text,
+            )
+            self.assertIn(
+                '"end_time":"2024-02-07T22:47:22.050000Z",'
+                '"duration":0.050000',
+                detreq_text,
+            )
+            self.assertIsInstance(
+                json.loads(buffer_text)["duration"],
+                float,
+            )
+            self.assertIsInstance(
+                json.loads(detreq_text)["duration"],
+                float,
+            )
             self.assertEqual(
                 _read_jsonl(output_dir / "buffer_intervals.jsonl")[0][
                     "interval_type"

@@ -107,6 +107,7 @@ def _interval_from_record(
         return None
 
     end_time = start_time + _sample_span(sample_count, sampling_rate)
+    duration = round((end_time - start_time).total_seconds(), 6)
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_by": generated_by(),
@@ -114,6 +115,7 @@ def _interval_from_record(
         "interval_type": interval_type,
         "start_time": format_timestamp(start_time),
         "end_time": format_timestamp(end_time),
+        "duration": duration,
         "start_boundary": "closed",
         "end_boundary": "closed",
         "sampling_rate_hz": sampling_rate,

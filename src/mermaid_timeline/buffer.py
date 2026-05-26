@@ -275,6 +275,11 @@ def _interval_record(
 ) -> JsonObject:
     end_source = end.row.get("source_file") if end is not None else None
     source_file = start.row.get("source_file") or end_source
+    duration = (
+        None
+        if end_time is None
+        else round((end_time - start.time).total_seconds(), 6)
+    )
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_by": generated_by(),
@@ -282,6 +287,7 @@ def _interval_record(
         "interval_type": "buf",
         "start_time": format_timestamp(start.time),
         "end_time": format_timestamp(end_time),
+        "duration": duration,
         "start_boundary": "closed",
         "end_boundary": end_boundary,
         "start_evidence_kind": start.evidence_kind,
