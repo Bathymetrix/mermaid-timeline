@@ -338,6 +338,10 @@ class CliTests(unittest.TestCase):
         )
 
         self.assertEqual([trace.yaxis for trace in figure.data], ["y", "y2", "y3"])
+        self.assertEqual(
+            [trace.line["color"] for trace in figure.data],
+            ["#1F77B4", "#D627B0", "#000000"],
+        )
         self.assertEqual(figure.layout["yaxis"]["title"], "DET")
         self.assertEqual(figure.layout["yaxis2"]["title"], "REQ")
         self.assertEqual(figure.layout["yaxis3"]["title"], "BUFFER")

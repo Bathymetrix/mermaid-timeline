@@ -381,9 +381,9 @@ def _instrument_report_filename(instrument_id: str) -> str:
 
 def _build_figure(intervals: Sequence[IntervalRow], go: object) -> object:
     colors = {
-        "buf": "#2B6CB0",
-        "det": "#C05621",
-        "req": "#2F855A",
+        "buf": "#000000",
+        "det": "#1F77B4",
+        "req": "#D627B0",
     }
     horizon = _plot_horizon(intervals)
     figure = go.Figure()
