@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import unittest
 
+from mermaid_timeline import __version__
 from mermaid_timeline.detreq import build_detreq_intervals
 from mermaid_timeline.diagnostics import TimelineValidationError
+from mermaid_timeline.schema import PACKAGE_NAME, SCHEMA_VERSION
 
 
 def event_row(**overrides: object) -> dict[str, object]:
@@ -33,6 +35,11 @@ class DetReqTests(unittest.TestCase):
         self.assertEqual(interval["end_time"], "2018-07-12T06:53:38.779681Z")
         self.assertEqual(interval["sampling_rate_hz"], 20.0)
         self.assertEqual(interval["sample_count"], 4448)
+        self.assertEqual(interval["schema_version"], SCHEMA_VERSION)
+        self.assertEqual(
+            interval["generated_by"],
+            {"package": PACKAGE_NAME, "version": __version__},
+        )
 
     def test_det_interval_requires_all_detection_fields(self) -> None:
         result = build_detreq_intervals(

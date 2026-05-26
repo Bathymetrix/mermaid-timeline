@@ -13,8 +13,8 @@ Keep buf intervals sourced only from log_acquisition_records.jsonl, and keep
 det/req intervals sourced only from mer_event_records.jsonl.
 
 Next task:
-- add the requested feature while preserving schema_version 0.1.0 unless the
-  output contract changes;
+- add the requested feature while preserving the current schema_version unless
+  the output contract changes;
 - add focused tests for any state-machine, validation, or timing change;
 - keep waveform analysis out of this package;
 - leave GCMT/catalog/travel-time joins for mermaid-gcmt unless the task is

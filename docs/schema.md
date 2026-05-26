@@ -1,8 +1,18 @@
 # mermaid-timeline Schema
 
-Schema version: `0.1.0`
+Current schema version: `1.0.0`
 
 All products are JSONL streams. There is no top-level document wrapper.
+
+## Versioning
+
+`schema_version` tracks output-data compatibility. It is intentionally separate
+from the `generated_by.version` package version, which tracks software releases.
+Multiple `mermaid-timeline` package releases may emit the same schema version.
+
+Schema changes should be intentional and semantically versioned. Bump the schema
+major version for incompatible output changes. Additive, backward-compatible
+fields may bump the schema minor version.
 
 ## Common Fields
 
@@ -18,13 +28,13 @@ Every interval record includes:
 - `end_boundary`
 - `provenance`
 
-Boundary vocabulary for `0.1.0`:
+Boundary vocabulary for `1.0.0`:
 
 - `closed`: the interval boundary timestamp is included in the known interval.
 - `open_unknown`: the true boundary is unknown and must not be inferred from the
   evidence timestamp.
 
-`interval_type` vocabulary for `0.1.0`:
+`interval_type` vocabulary for `1.0.0`:
 
 - `buf`: acquisition buffer interval synthesized from acquisition records.
 - `det`: detected MER event interval.
@@ -53,7 +63,7 @@ Output shape:
 
 ```json
 {
-  "schema_version": "0.1.0",
+  "schema_version": "1.0.0",
   "generated_by": {
     "package": "mermaid-timeline",
     "version": "0.1.0"
@@ -164,7 +174,7 @@ Output shape:
 
 ```json
 {
-  "schema_version": "0.1.0",
+  "schema_version": "1.0.0",
   "generated_by": {
     "package": "mermaid-timeline",
     "version": "0.1.0"

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import unittest
 
+from mermaid_timeline import __version__
 from mermaid_timeline.buffer import build_buffer_intervals
 from mermaid_timeline.diagnostics import TimelineValidationError
+from mermaid_timeline.schema import PACKAGE_NAME, SCHEMA_VERSION
 
 
 def row(
@@ -40,6 +42,11 @@ class BufferTests(unittest.TestCase):
         self.assertEqual(interval["end_boundary"], "closed")
         self.assertEqual(interval["start_evidence_kind"], "assertion")
         self.assertEqual(interval["end_evidence_kind"], "transition")
+        self.assertEqual(interval["schema_version"], SCHEMA_VERSION)
+        self.assertEqual(
+            interval["generated_by"],
+            {"package": PACKAGE_NAME, "version": __version__},
+        )
 
     def test_started_transition_then_stopped_assertion_keeps_end_open(self) -> None:
         result = build_buffer_intervals(
