@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+from mermaid_timeline import __version__
 from mermaid_timeline.diagnostics import TimelineValidationError
 from mermaid_timeline.pipeline import run_timeline_pipeline
 from mermaid_timeline.plotting import (
@@ -146,6 +147,12 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="mermaid-timeline",
         description="Synthesize interval timeline products from normalized MERMAID records.",
         formatter_class=_CompactOptionHelpFormatter,
+    )
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     subparsers = parser.add_subparsers(dest="command")
 

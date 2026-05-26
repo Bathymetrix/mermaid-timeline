@@ -8,11 +8,34 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
+from mermaid_timeline import __version__
 from mermaid_timeline.cli import main
 from mermaid_timeline.plotting import MissingPlotlyError
 
 
 class CliTests(unittest.TestCase):
+    def test_cli_version_options_report_package_version(self) -> None:
+        for option in ("--version", "-v"):
+            with self.subTest(option=option):
+                output = io.StringIO()
+                stderr = io.StringIO()
+                with redirect_stdout(output), redirect_stderr(stderr):
+                    with self.assertRaises(SystemExit) as cm:
+                        main([option])
+
+                self.assertEqual(cm.exception.code, 0)
+                self.assertEqual(output.getvalue(), f"mermaid-timeline {__version__}\n")
+                self.assertEqual(stderr.getvalue(), "")
+
+    def test_cli_help_lists_version_option(self) -> None:
+        output = io.StringIO()
+        with redirect_stdout(output):
+            with self.assertRaises(SystemExit) as cm:
+                main(["-h"])
+
+        self.assertEqual(cm.exception.code, 0)
+        self.assertIn("-v, --version", output.getvalue())
+
     def test_cli_build_writes_interval_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_name:
             tmp_path = Path(tmp_name)
